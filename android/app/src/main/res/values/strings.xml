@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">SMART POS</string>
+    <string name="web_app_url">https://smart.example.com/pos</string>
+</resources>
