@@ -10,5 +10,8 @@
 </head>
 <body class="app-body @yield('body_class')">
     @yield('content')
+    <footer class="py-6 text-center text-xs text-slate-400">
+        © 2026 Ryand Arifriantoni. All rights reserved.
+    </footer>
 </body>
 </html>

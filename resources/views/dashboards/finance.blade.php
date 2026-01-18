@@ -111,6 +111,11 @@
         @endif
     </section>
 
+    @include('partials.revenue-chart', [
+        'title' => 'Grafik Pemasukan',
+        'subtitle' => 'Total pembelian semua barang (pemasukan) dengan indikator MA Cross.',
+    ])
+
     <section class="card">
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
             <div>

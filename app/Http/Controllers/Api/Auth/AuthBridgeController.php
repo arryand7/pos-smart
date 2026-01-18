@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,7 @@ class AuthBridgeController extends Controller
 
         if ($userModel = $this->resolveUserModel($user)) {
             Auth::login($userModel);
+            ActivityLog::log('logged_in', 'Login via password.', $userModel);
         }
 
         session()->put('smart_token', $token);
@@ -54,6 +56,7 @@ class AuthBridgeController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
+        ActivityLog::log('logged_out', 'Logout');
         Auth::logout();
 
         if ($token = $request->session()->pull('smart_token')) {

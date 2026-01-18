@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Auth\AuthBridgeController;
 use App\Http\Controllers\Api\Auth\SsoController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\Finance\DashboardController as FinanceDashboardController;
+use App\Http\Controllers\Finance\AnalyticsController;
 use App\Http\Controllers\Finance\ReportController;
 use App\Http\Controllers\Finance\ReportExportController;
 use App\Http\Controllers\PaymentRedirectController;
@@ -64,6 +65,10 @@ Route::middleware('session.role:admin,bendahara,super_admin')
         Route::get('/accounting', [AccountingSettingController::class, 'edit'])->name('accounting');
         Route::put('/accounting', [AccountingSettingController::class, 'update'])->name('accounting.update');
     });
+
+Route::middleware('session.role:admin,bendahara,super_admin')
+    ->get('/analytics/revenue-series', [AnalyticsController::class, 'revenueSeries'])
+    ->name('analytics.revenue-series');
 
 Route::middleware('session.role:admin,bendahara,kasir,wali,santri,super_admin')->group(function () {
     Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'edit'])->name('profile.edit');

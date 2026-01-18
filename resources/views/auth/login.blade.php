@@ -51,6 +51,9 @@
 
             <p class="text-xs text-slate-500 text-center mt-6">Gunakan akun kasir atau admin untuk mengakses POS.</p>
         </div>
+        <div class="text-center text-xs text-slate-400 mt-6">
+            © 2026 Ryand Arifriantoni. All rights reserved.
+        </div>
     </div>
 </div>
 </body>

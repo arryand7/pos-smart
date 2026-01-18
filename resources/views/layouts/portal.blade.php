@@ -54,6 +54,10 @@
         @include('partials.portal-switcher')
 
         @yield('content')
+
+        <div class="text-center text-xs text-slate-400 py-6">
+            © 2026 Ryand Arifriantoni. All rights reserved.
+        </div>
     </main>
 
     <!-- Bottom Navigation -->

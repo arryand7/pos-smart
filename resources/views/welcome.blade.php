@@ -182,8 +182,9 @@
                     </ul>
                 </div>
             </div>
-            <div class="pt-8 border-t border-slate-800 text-center text-sm">
-                &copy; 2026 Sabira Mart. All rights reserved.
+            <div class="pt-8 border-t border-slate-800 text-center text-sm space-y-1">
+                <div>&copy; 2026 Sabira Mart. All rights reserved.</div>
+                <div class="text-slate-500">Dibuat oleh Ryand Arifriantoni (arryand7@gmail.com).</div>
             </div>
         </div>
     </footer>

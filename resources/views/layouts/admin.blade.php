@@ -128,6 +128,9 @@
                     <span>🚪</span> Keluar
                 </button>
             </form>
+            <div class="mt-4 text-[11px] text-slate-500 text-center">
+                © 2026 Ryand Arifriantoni.
+            </div>
         </div>
     </aside>
 

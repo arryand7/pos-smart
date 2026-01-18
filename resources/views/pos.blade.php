@@ -33,6 +33,7 @@
         }
         .pos-shell {
             height: 100%;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
@@ -172,9 +173,9 @@
             display: grid;
             grid-template-columns: 1.5fr 1fr;
             gap: 1.5rem;
-            padding: 1.5rem;
+            padding: 1rem;
             overflow: hidden;
-            min-height: calc(100vh - 64px);
+            min-height: 0;
         }
 
         /* Left Panel - Catalog */
@@ -361,6 +362,13 @@
             overflow: hidden;
             background: #fff;
             min-height: 0;
+        }
+        .pos-footer {
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--muted);
+            padding: 0.5rem 1rem 0.75rem;
+            flex-shrink: 0;
         }
         .cart-scroll > .santri-selector,
         .cart-scroll > .cart-items,
@@ -877,6 +885,10 @@
             </div>
         </div>
     </main>
+
+    <footer class="pos-footer">
+        © 2026 Ryand Arifriantoni. All rights reserved.
+    </footer>
 </div>
 
 <!-- Scan Modal -->

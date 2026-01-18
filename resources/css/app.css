@@ -289,6 +289,64 @@
         @apply inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold;
     }
 
+    .range-pill {
+        @apply px-3 py-1 rounded-full text-xs font-semibold text-slate-600 transition-all;
+        background: transparent;
+        border: 1px solid transparent;
+    }
+
+    .range-pill:hover {
+        @apply text-emerald-700;
+        background: rgba(16, 185, 129, 0.12);
+    }
+
+    .range-pill.active {
+        @apply text-white shadow-sm;
+        background: linear-gradient(135deg, #007A5C, #0aa072);
+        border-color: transparent;
+    }
+
+    .range-group {
+        @apply flex flex-wrap gap-1 p-1 rounded-full bg-slate-100 border border-slate-200;
+    }
+
+    .range-menu {
+        @apply relative;
+    }
+
+    .range-menu[open] .range-trigger svg {
+        transform: rotate(180deg);
+    }
+
+    .range-trigger {
+        @apply flex items-center gap-2 px-3 py-2 rounded-full border border-slate-200 bg-white text-sm font-semibold text-slate-600 cursor-pointer shadow-sm;
+        list-style: none;
+    }
+
+    .range-trigger::-webkit-details-marker {
+        display: none;
+    }
+
+    .range-panel {
+        @apply absolute right-0 mt-2 w-44 rounded-2xl border border-slate-200 bg-white shadow-xl p-2 z-20;
+    }
+
+    .range-group-title {
+        @apply text-[11px] uppercase font-bold text-slate-400 px-2 pt-2 pb-1;
+    }
+
+    .range-item {
+        @apply w-full text-left px-3 py-2 text-sm rounded-xl text-slate-600 font-semibold transition-colors;
+    }
+
+    .range-item:hover {
+        @apply bg-emerald-50 text-emerald-700;
+    }
+
+    .range-item.active {
+        @apply bg-emerald-600 text-white;
+    }
+
     .soft-panel {
         @apply rounded-2xl border border-slate-100 bg-white/70 shadow-sm backdrop-blur-sm;
     }

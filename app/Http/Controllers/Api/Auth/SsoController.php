@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Auth;
 use App\Http\Controllers\Controller;
 use App\AppSettingManager;
 use App\Enums\UserRole;
+use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -103,6 +104,7 @@ class SsoController extends Controller
 
         Auth::login($user, true);
         $request->session()->regenerate();
+        ActivityLog::log('logged_in', 'SSO login.', $user);
 
         $payload = [
             'id' => $user->id,

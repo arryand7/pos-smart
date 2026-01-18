@@ -74,6 +74,11 @@
     </div>
     @endif
 
+    @include('partials.revenue-chart', [
+        'title' => 'Grafik Pemasukan',
+        'subtitle' => 'Total pembelian semua barang (pemasukan) dengan indikator MA Cross.',
+    ])
+
     <div class="card">
         <div class="flex items-center justify-between flex-wrap gap-3 mb-3">
             <div>

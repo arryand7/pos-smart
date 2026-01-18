@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,15 @@ class AuthController extends Controller
 
         $user->forceFill(['last_login_at' => now()])->save();
 
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => 'logged_in',
+            'description' => 'API login.',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
+        ]);
+
         return response()->json([
             'token' => $token->plainTextToken,
             'token_type' => 'Bearer',
@@ -55,6 +65,14 @@ class AuthController extends Controller
         $user = $request->user();
 
         if ($user && $user->currentAccessToken()) {
+            ActivityLog::create([
+                'user_id' => $user->id,
+                'action' => 'logged_out',
+                'description' => 'API logout.',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'created_at' => now(),
+            ]);
             $user->currentAccessToken()->delete();
         }
 
