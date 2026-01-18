@@ -14,7 +14,14 @@ class BrandingSettingController extends Controller
     {
         $settings = AppSetting::first() ?? new AppSetting();
 
-        return view('admin.settings.branding', compact('settings'));
+        $timezones = [
+            'Asia/Jakarta' => 'WIB (Asia/Jakarta)',
+            'Asia/Makassar' => 'WITA (Asia/Makassar)',
+            'Asia/Jayapura' => 'WIT (Asia/Jayapura)',
+            'UTC' => 'UTC',
+        ];
+
+        return view('admin.settings.branding', compact('settings', 'timezones'));
     }
 
     public function update(Request $request): RedirectResponse
@@ -25,6 +32,7 @@ class BrandingSettingController extends Controller
             'accent_color' => ['nullable', 'string', 'max:20'],
             'tagline' => ['nullable', 'string', 'max:255'],
             'footer_text' => ['nullable', 'string', 'max:500'],
+            'timezone' => ['nullable', 'string', 'max:64'],
         ]);
 
         // Handle logo upload

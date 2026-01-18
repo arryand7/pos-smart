@@ -84,6 +84,7 @@ class LookupController extends Controller
                 $builder
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('nis', 'like', "%{$search}%")
+                    ->orWhere('qr_code', 'like', "%{$search}%")
                     ->orWhere('nickname', 'like', "%{$search}%");
             });
         }
@@ -91,9 +92,11 @@ class LookupController extends Controller
         $santris = $query->limit(10)->get([
             'id',
             'nis',
+            'qr_code',
             'name',
             'wallet_balance',
             'daily_limit',
+            'weekly_limit',
             'monthly_limit',
             'is_wallet_locked',
         ]);

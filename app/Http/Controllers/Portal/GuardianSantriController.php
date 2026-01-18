@@ -25,6 +25,7 @@ class GuardianSantriController extends Controller
 
         $data = $request->validate([
             'daily_limit' => ['nullable', 'numeric', 'min:0'],
+            'weekly_limit' => ['nullable', 'numeric', 'min:0'],
             'monthly_limit' => ['nullable', 'numeric', 'min:0'],
             'is_wallet_locked' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:255'],
@@ -32,6 +33,7 @@ class GuardianSantriController extends Controller
 
         $santri->update([
             'daily_limit' => $data['daily_limit'] ?? $santri->daily_limit,
+            'weekly_limit' => $data['weekly_limit'] ?? $santri->weekly_limit,
             'monthly_limit' => $data['monthly_limit'] ?? $santri->monthly_limit,
             'is_wallet_locked' => (bool) ($data['is_wallet_locked'] ?? false),
             'notes' => $data['notes'] ?? $santri->notes,

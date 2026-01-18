@@ -96,9 +96,48 @@ class WalletService
         }
 
         $dailyLimit = $santri->daily_limit ?: config('smart.wallet.default_daily_limit', 0);
+        $weeklyLimit = $santri->weekly_limit ?: config('smart.wallet.default_weekly_limit', 200000);
+        $monthlyLimit = $santri->monthly_limit ?: config('smart.wallet.default_monthly_limit', 0);
 
-        if ($dailyLimit > 0 && $amount > $dailyLimit) {
-            throw new RuntimeException('Nominal transaksi melebihi batas harian yang diizinkan.');
+        $now = now();
+
+        if ($dailyLimit > 0) {
+            $spentToday = WalletTransaction::query()
+                ->where('santri_id', $santri->id)
+                ->where('type', 'debit')
+                ->where('status', 'completed')
+                ->whereBetween('occurred_at', [$now->copy()->startOfDay(), $now->copy()->endOfDay()])
+                ->sum('amount');
+
+            if (($spentToday + $amount) > $dailyLimit) {
+                throw new RuntimeException('Nominal transaksi melebihi batas harian yang diizinkan.');
+            }
+        }
+
+        if ($weeklyLimit > 0) {
+            $spentWeek = WalletTransaction::query()
+                ->where('santri_id', $santri->id)
+                ->where('type', 'debit')
+                ->where('status', 'completed')
+                ->whereBetween('occurred_at', [$now->copy()->startOfWeek(), $now->copy()->endOfWeek()])
+                ->sum('amount');
+
+            if (($spentWeek + $amount) > $weeklyLimit) {
+                throw new RuntimeException('Nominal transaksi melebihi batas mingguan yang diizinkan.');
+            }
+        }
+
+        if ($monthlyLimit > 0) {
+            $spentMonth = WalletTransaction::query()
+                ->where('santri_id', $santri->id)
+                ->where('type', 'debit')
+                ->where('status', 'completed')
+                ->whereBetween('occurred_at', [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()])
+                ->sum('amount');
+
+            if (($spentMonth + $amount) > $monthlyLimit) {
+                throw new RuntimeException('Nominal transaksi melebihi batas bulanan yang diizinkan.');
+            }
         }
     }
 }

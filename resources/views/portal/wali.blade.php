@@ -128,6 +128,10 @@
                                     <input type="number" name="daily_limit" value="{{ old('daily_limit', $santri->daily_limit) }}" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
                                 </div>
                                 <div>
+                                    <label class="block text-xs font-medium text-slate-500 mb-1">Limit Mingguan (Rp)</label>
+                                    <input type="number" name="weekly_limit" value="{{ old('weekly_limit', $santri->weekly_limit) }}" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+                                </div>
+                                <div>
                                     <label class="block text-xs font-medium text-slate-500 mb-1">Limit Bulanan (Rp)</label>
                                     <input type="number" name="monthly_limit" value="{{ old('monthly_limit', $santri->monthly_limit) }}" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
                                 </div>

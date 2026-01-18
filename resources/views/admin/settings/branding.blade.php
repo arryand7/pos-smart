@@ -57,6 +57,16 @@
             </div>
 
             <label class="form-label">
+                Zona Waktu
+                <select class="form-select" name="timezone">
+                    @foreach($timezones as $value => $label)
+                        <option value="{{ $value }}" @selected(($settings->timezone ?? config('app.timezone')) === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+                <span class="form-help">Pengaturan ini memengaruhi timestamp laporan dan transaksi.</span>
+            </label>
+
+            <label class="form-label">
                 Teks Footer
                 <textarea class="form-textarea" name="footer_text" rows="2" placeholder="© 2026 Sabira Mart. All rights reserved.">{{ $settings->footer_text ?? '' }}</textarea>
             </label>

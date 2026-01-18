@@ -16,6 +16,7 @@ class Santri extends Model
         'user_id',
         'wali_id',
         'nis',
+        'qr_code',
         'nisn',
         'name',
         'nickname',
@@ -25,6 +26,7 @@ class Santri extends Model
         'status',
         'wallet_balance',
         'daily_limit',
+        'weekly_limit',
         'monthly_limit',
         'limit_reset_at',
         'is_wallet_locked',
@@ -38,8 +40,9 @@ class Santri extends Model
     {
         return [
             'wallet_balance' => 'decimal:2',
-            'daily_limit' => 'decimal:2',
-            'monthly_limit' => 'decimal:2',
+        'daily_limit' => 'decimal:2',
+        'weekly_limit' => 'decimal:2',
+        'monthly_limit' => 'decimal:2',
             'limit_reset_at' => 'datetime',
             'is_wallet_locked' => 'boolean',
             'blocked_category_ids' => 'array',

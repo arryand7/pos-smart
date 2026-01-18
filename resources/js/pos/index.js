@@ -783,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.santriResults = response.data?.data || response.data || [];
             renderSantriResults();
 
-            if (state.santriResults.length === 1 && state.santriResults[0].nis === trimmed) {
+            if (state.santriResults.length === 1 && (state.santriResults[0].nis === trimmed || state.santriResults[0].qr_code === trimmed)) {
                 selectSantri(state.santriResults[0]);
             }
         } catch (error) {

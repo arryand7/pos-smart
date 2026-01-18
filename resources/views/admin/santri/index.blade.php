@@ -21,8 +21,9 @@
                 <tr>
                     <th>Santri</th>
                     <th>NIS</th>
+                    <th>QR Code</th>
                     <th>Saldo</th>
-                    <th>Limit Harian</th>
+                    <th>Limit</th>
                     <th>Status Dompet</th>
                     <th></th>
                 </tr>
@@ -35,8 +36,13 @@
                             <small>Wali: {{ $santri->wali?->name ?? '-' }}</small>
                         </td>
                         <td>{{ $santri->nis }}</td>
+                        <td class="text-xs font-mono text-slate-500">{{ $santri->qr_code ?? '-' }}</td>
                         <td>Rp{{ number_format($santri->wallet_balance, 0, ',', '.') }}</td>
-                        <td>Rp{{ number_format($santri->daily_limit, 0, ',', '.') }}</td>
+                        <td class="text-xs text-slate-500 space-y-1">
+                            <div>Harian: Rp{{ number_format($santri->daily_limit ?? 0, 0, ',', '.') }}</div>
+                            <div>Mingguan: Rp{{ number_format($santri->weekly_limit ?? 0, 0, ',', '.') }}</div>
+                            <div>Bulanan: Rp{{ number_format($santri->monthly_limit ?? 0, 0, ',', '.') }}</div>
+                        </td>
                         <td>
                             <span class="status {{ $santri->is_wallet_locked ? 'inactive' : 'active' }}">
                                 {{ $santri->is_wallet_locked ? 'Diblokir' : 'Aktif' }}
@@ -47,7 +53,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="text-center py-6 text-slate-400">Belum ada santri.</td></tr>
+                    <tr><td colspan="7" class="text-center py-6 text-slate-400">Belum ada santri.</td></tr>
                 @endforelse
                 </tbody>
             </table>

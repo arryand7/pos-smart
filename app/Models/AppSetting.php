@@ -29,6 +29,7 @@ class AppSetting extends Model
         'accent_color',
         'tagline',
         'footer_text',
+        'timezone',
         // Accounting
         'account_cash',
         'account_wallet_liability',

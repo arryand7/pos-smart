@@ -38,13 +38,17 @@
         <p class="text-slate-200 text-xs font-semibold mb-1">Saldo Dompet</p>
         <h2 class="text-3xl font-bold mb-4 text-white">Rp{{ number_format($santri->wallet_balance, 0, ',', '.') }}</h2>
         
-        <div class="flex gap-4 border-t border-emerald-200/40 pt-4">
+        <div class="grid grid-cols-3 gap-3 border-t border-emerald-200/40 pt-4 text-center">
             <div>
-                <p class="text-[10px] text-slate-300 uppercase tracking-wider mb-1">Limit Harian</p>
+                <p class="text-[10px] text-slate-300 uppercase tracking-wider mb-1">Harian</p>
                 <p class="font-bold text-sm text-white">Rp{{ number_format($santri->daily_limit ?? 0, 0, ',', '.') }}</p>
             </div>
             <div>
-                 <p class="text-[10px] text-slate-300 uppercase tracking-wider mb-1">Limit Bulanan</p>
+                <p class="text-[10px] text-slate-300 uppercase tracking-wider mb-1">Mingguan</p>
+                <p class="font-bold text-sm text-white">Rp{{ number_format($santri->weekly_limit ?? 0, 0, ',', '.') }}</p>
+            </div>
+            <div>
+                <p class="text-[10px] text-slate-300 uppercase tracking-wider mb-1">Bulanan</p>
                 <p class="font-bold text-sm text-white">Rp{{ number_format($santri->monthly_limit ?? 0, 0, ',', '.') }}</p>
             </div>
         </div>

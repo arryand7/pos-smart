@@ -49,5 +49,11 @@ class AppServiceProvider extends ServiceProvider
         User::observe($observer);
         AppSetting::observe($observer);
         PaymentProviderConfig::observe($observer);
+
+        $timezone = AppSetting::getValue('timezone');
+        if ($timezone) {
+            config(['app.timezone' => $timezone]);
+            date_default_timezone_set($timezone);
+        }
     }
 }
