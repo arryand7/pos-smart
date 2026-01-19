@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Exports\ExportsTable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -13,7 +14,8 @@ use Illuminate\View\View;
 
 class UserController extends Controller
 {
-    public function index(Request $request): View
+    use ExportsTable;
+    public function index(Request $request)
     {
         $roles = [UserRole::ADMIN, UserRole::BENDAHARA, UserRole::KASIR];
 
@@ -22,10 +24,53 @@ class UserController extends Controller
         }
 
         $query = User::query()
-            ->whereIn('role', $roles)
-            ->latest();
+            ->whereIn('role', $roles);
 
-        $users = $query->get();
+        if ($search = $request->string('search')->trim()->value()) {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('role', 'like', "%{$search}%");
+            });
+        }
+
+        $sort = $request->string('sort')->value();
+        $direction = $request->string('direction')->lower()->value() === 'desc' ? 'desc' : 'asc';
+
+        $query->when($sort, function ($builder) use ($sort, $direction) {
+            return match ($sort) {
+                'name', 'email', 'role', 'created_at' => $builder->orderBy($sort, $direction),
+                default => $builder->orderByDesc('created_at'),
+            };
+        }, fn ($builder) => $builder->orderByDesc('created_at'));
+
+        if ($exportType = $this->exportType($request)) {
+            $rows = $query->get()->map(function (User $user) {
+                $roles = collect($user->roles ?? [])
+                    ->push($user->role?->value ?? $user->role)
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->implode(', ');
+
+                return [
+                    $user->name,
+                    $user->email,
+                    strtoupper($roles),
+                    $user->created_at?->format('d M Y') ?? '-',
+                ];
+            })->all();
+
+            $headings = ['Nama', 'Email', 'Role', 'Bergabung'];
+
+            return $this->exportTable($exportType, 'users', $headings, $rows);
+        }
+
+        $perPage = $request->integer('per_page', 15);
+        $perPage = in_array($perPage, [10, 15, 25, 50, 100], true) ? $perPage : 15;
+
+        $users = $query->paginate($perPage)->withQueryString();
 
         return view('admin.users.index', compact('users'));
     }

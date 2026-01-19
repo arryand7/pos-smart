@@ -11,20 +11,42 @@
             </div>
         </div>
 
-        <form method="GET" class="mb-4">
-            <input class="form-input" type="text" name="search" placeholder="Cari nama / NIS" value="{{ request('search') }}">
+        <form method="GET" class="flex flex-wrap items-end justify-between gap-3 mb-4">
+            <div class="flex flex-wrap items-end gap-3">
+                <label class="text-xs font-semibold text-slate-500">
+                    Cari
+                    <input class="form-input mt-1 w-64" type="text" name="search" placeholder="Nama / NIS / Wali" value="{{ request('search') }}">
+                </label>
+                <label class="text-xs font-semibold text-slate-500">
+                    Per halaman
+                    <select name="per_page" class="form-select mt-1">
+                        @foreach([10,15,25,50,100] as $size)
+                            <option value="{{ $size }}" @selected((int) request('per_page', 15) === $size)>{{ $size }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <input type="hidden" name="sort" value="{{ request('sort') }}">
+                <input type="hidden" name="direction" value="{{ request('direction') }}">
+                <button type="submit" class="btn btn-secondary">Terapkan</button>
+            </div>
+            <div class="flex items-center gap-2">
+                @php $exportQuery = request()->except(['export', 'page']); @endphp
+                <a class="btn btn-outline btn-sm" href="{{ request()->url().'?' . http_build_query(array_merge($exportQuery, ['export' => 'excel'])) }}">Excel</a>
+                <a class="btn btn-outline btn-sm" href="{{ request()->url().'?' . http_build_query(array_merge($exportQuery, ['export' => 'csv'])) }}">CSV</a>
+                <a class="btn btn-outline btn-sm" href="{{ request()->url().'?' . http_build_query(array_merge($exportQuery, ['export' => 'pdf'])) }}">PDF</a>
+            </div>
         </form>
 
         <div class="table-scroll">
             <table class="table">
                 <thead>
                 <tr>
-                    <th>Santri</th>
-                    <th>NIS</th>
-                    <th>QR Code</th>
-                    <th>Saldo</th>
-                    <th>Limit</th>
-                    <th>Status Dompet</th>
+                    <x-sortable-th field="name" label="Santri" />
+                    <x-sortable-th field="nis" label="NIS" />
+                    <x-sortable-th field="qr_code" label="QR Code" />
+                    <x-sortable-th field="wallet_balance" label="Saldo" />
+                    <x-sortable-th field="daily_limit" label="Limit" />
+                    <x-sortable-th field="is_wallet_locked" label="Status Dompet" />
                     <th></th>
                 </tr>
                 </thead>

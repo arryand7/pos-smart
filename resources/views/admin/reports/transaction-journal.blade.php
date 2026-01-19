@@ -13,9 +13,29 @@
             <input type="hidden" name="start_date" value="{{ $startDate }}">
             <input type="hidden" name="end_date" value="{{ $endDate }}">
         </div>
+        <div class="w-full md:w-60">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Cari</label>
+            <input type="text" name="search" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500" placeholder="Ref, santri, kasir..." value="{{ request('search') }}">
+        </div>
+        <div class="w-full md:w-40">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Per halaman</label>
+            <select name="per_page" class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500">
+                @foreach([10,15,25,50,100] as $size)
+                    <option value="{{ $size }}" @selected((int) request('per_page', 15) === $size)>{{ $size }}</option>
+                @endforeach
+            </select>
+        </div>
         <button type="submit" class="btn btn-secondary">
             Filter Data
         </button>
+        <input type="hidden" name="sort" value="{{ request('sort') }}">
+        <input type="hidden" name="direction" value="{{ request('direction') }}">
+        <div class="flex items-center gap-2 ml-auto">
+            @php $exportQuery = request()->except(['export', 'page']); @endphp
+            <a class="btn btn-outline btn-sm" href="{{ request()->url().'?' . http_build_query(array_merge($exportQuery, ['export' => 'excel'])) }}">Excel</a>
+            <a class="btn btn-outline btn-sm" href="{{ request()->url().'?' . http_build_query(array_merge($exportQuery, ['export' => 'csv'])) }}">CSV</a>
+            <a class="btn btn-outline btn-sm" href="{{ request()->url().'?' . http_build_query(array_merge($exportQuery, ['export' => 'pdf'])) }}">PDF</a>
+        </div>
     </form>
 </div>
 
@@ -24,13 +44,13 @@
         <table class="datatable w-full">
         <thead>
             <tr>
-                <th>REF ID</th>
-                <th>Waktu</th>
-                <th>Santri</th>
-                <th>Kasir</th>
-                <th>Sales Type</th>
-                <th>Total</th>
-                <th>Status</th>
+                <x-sortable-th field="reference" label="REF ID" />
+                <x-sortable-th field="created_at" label="Waktu" />
+                <x-sortable-th field="santri" label="Santri" />
+                <x-sortable-th field="kasir" label="Kasir" />
+                <x-sortable-th field="type" label="Sales Type" />
+                <x-sortable-th field="total_amount" label="Total" />
+                <x-sortable-th field="status" label="Status" />
                 <th>Aksi</th>
             </tr>
         </thead>
@@ -41,7 +61,7 @@
                 <td>{{ $trx->created_at->format('d/m/Y H:i') }}</td>
                 <td>
                     @if($trx->santri)
-                        <div class="font-medium">{{ $trx->santri->nama }}</div>
+                        <div class="font-medium">{{ $trx->santri->name }}</div>
                         <div class="text-xs text-slate-500">{{ $trx->santri->nis }}</div>
                     @else
                         <span class="text-slate-400">-</span>
@@ -75,6 +95,10 @@
             @endforeach
         </tbody>
         </table>
+    </div>
+
+    <div class="mt-6">
+        {{ $transactions->links() }}
     </div>
 </div>
 

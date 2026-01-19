@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.className = 'product-card';
             card.dataset.id = product.id;
             const thumb = product.photo_url
-                ? `<img src="${product.photo_url}" alt="${product.name}" loading="lazy">`
+                ? `<img src="${product.photo_url}" alt="${product.name}" loading="lazy" onerror="this.closest('.product-thumb').innerHTML='<span>Tanpa Foto</span>'">`
                 : `<span>Tanpa Foto</span>`;
             card.innerHTML = `
                 <div class="product-thumb">${thumb}</div>

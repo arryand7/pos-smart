@@ -22,6 +22,7 @@ use App\Http\Controllers\Finance\AnalyticsController;
 use App\Http\Controllers\Finance\ReportController;
 use App\Http\Controllers\Finance\ReportExportController;
 use App\Http\Controllers\MidtransRedirectController;
+use App\Http\Controllers\MediaController;
 use App\Http\Controllers\PaymentRedirectController;
 use App\Http\Controllers\Portal\GuardianCategoryController;
 use App\Http\Controllers\Portal\GuardianPaymentController;
@@ -47,6 +48,7 @@ Route::get('/sso/callback', [SsoController::class, 'callback'])->name('sso.callb
 Route::get('/produk', [CatalogController::class, 'index'])->name('catalog.index');
 
 Route::get('/payments/midtrans/redirect', MidtransRedirectController::class)->name('payments.midtrans.redirect');
+Route::get('/media/products/{path}', MediaController::class)->where('path', '.*')->name('media.products');
 
 Route::middleware('session.role:bendahara,super_admin')->group(function () {
     Route::get('/dashboard/bendahara', FinanceDashboardController::class)->name('dashboard.finance');

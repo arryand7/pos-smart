@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Wali;
 use App\Enums\UserRole;
+use App\Support\Exports\ExportsTable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -14,11 +15,51 @@ use Illuminate\View\View;
 
 class WaliController extends Controller
 {
-    public function index(Request $request): View
+    use ExportsTable;
+    public function index(Request $request)
     {
-        $query = Wali::query()->withCount('santris')->latest();
+        $query = Wali::query()->withCount('santris');
 
-        $walis = $query->get();
+        if ($search = $request->string('search')->trim()->value()) {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('address', 'like', "%{$search}%");
+            });
+        }
+
+        $sort = $request->string('sort')->value();
+        $direction = $request->string('direction')->lower()->value() === 'desc' ? 'desc' : 'asc';
+
+        $query->when($sort, function ($builder) use ($sort, $direction) {
+            return match ($sort) {
+                'name', 'email', 'phone', 'address', 'santris_count' => $builder->orderBy($sort, $direction),
+                default => $builder->orderByDesc('created_at'),
+            };
+        }, fn ($builder) => $builder->orderByDesc('created_at'));
+
+        if ($exportType = $this->exportType($request)) {
+            $rows = $query->get()->map(function (Wali $wali) {
+                return [
+                    $wali->name,
+                    $wali->phone,
+                    $wali->email,
+                    $wali->address ?? '-',
+                    $wali->santris_count,
+                ];
+            })->all();
+
+            $headings = ['Nama Wali', 'Telepon', 'Email', 'Alamat', 'Jumlah Santri'];
+
+            return $this->exportTable($exportType, 'wali', $headings, $rows);
+        }
+
+        $perPage = $request->integer('per_page', 15);
+        $perPage = in_array($perPage, [10, 15, 25, 50, 100], true) ? $perPage : 15;
+
+        $walis = $query->paginate($perPage)->withQueryString();
 
         return view('admin.wali.index', compact('walis'));
     }

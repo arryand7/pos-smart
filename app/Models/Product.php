@@ -69,8 +69,26 @@ class Product extends Model
 
     public function getPhotoUrlAttribute(): ?string
     {
-        return $this->photo_path
-            ? Storage::disk('public')->url($this->photo_path)
-            : null;
+        if (! $this->photo_path) {
+            return null;
+        }
+
+        if (! Storage::disk('public')->exists($this->photo_path)) {
+            return null;
+        }
+
+        $publicStorage = public_path('storage');
+
+        if (! file_exists($publicStorage)) {
+            $path = $this->photo_path;
+
+            if (str_starts_with($path, 'products/')) {
+                $path = substr($path, strlen('products/'));
+            }
+
+            return url('/media/products/'.$path);
+        }
+
+        return Storage::disk('public')->url($this->photo_path);
     }
 }

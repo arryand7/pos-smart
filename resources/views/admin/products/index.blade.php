@@ -12,16 +12,41 @@
 
 @section('content')
 <div class="admin-card">
+    <form method="GET" class="flex flex-wrap items-end justify-between gap-3 mb-4">
+        <div class="flex flex-wrap items-end gap-3">
+            <label class="text-xs font-semibold text-slate-500">
+                Cari
+                <input type="text" name="search" value="{{ request('search') }}" class="form-input mt-1 w-64" placeholder="Nama, SKU, Barcode...">
+            </label>
+            <label class="text-xs font-semibold text-slate-500">
+                Per halaman
+                <select name="per_page" class="form-select mt-1">
+                    @foreach([10,15,25,50,100] as $size)
+                        <option value="{{ $size }}" @selected((int) request('per_page', 15) === $size)>{{ $size }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <input type="hidden" name="sort" value="{{ request('sort') }}">
+            <input type="hidden" name="direction" value="{{ request('direction') }}">
+            <button type="submit" class="btn btn-secondary">Terapkan</button>
+        </div>
+        <div class="flex items-center gap-2">
+            @php $exportQuery = request()->except(['export', 'page']); @endphp
+            <a class="btn btn-outline btn-sm" href="{{ request()->url().'?' . http_build_query(array_merge($exportQuery, ['export' => 'excel'])) }}">Excel</a>
+            <a class="btn btn-outline btn-sm" href="{{ request()->url().'?' . http_build_query(array_merge($exportQuery, ['export' => 'csv'])) }}">CSV</a>
+            <a class="btn btn-outline btn-sm" href="{{ request()->url().'?' . http_build_query(array_merge($exportQuery, ['export' => 'pdf'])) }}">PDF</a>
+        </div>
+    </form>
     <div class="table-scroll">
         <table class="datatable w-full">
         <thead>
             <tr>
-                <th>Produk</th>
-                <th>Kategori</th>
-                <th>Lokasi</th>
-                <th>Harga Beli</th>
-                <th>Harga Jual</th>
-                <th>Stok</th>
+                <x-sortable-th field="name" label="Produk" />
+                <x-sortable-th field="category" label="Kategori" />
+                <x-sortable-th field="location" label="Lokasi" />
+                <x-sortable-th field="cost_price" label="Harga Beli" />
+                <x-sortable-th field="sale_price" label="Harga Jual" />
+                <x-sortable-th field="stock" label="Stok" />
                 <th>Aksi</th>
             </tr>
         </thead>
@@ -84,6 +109,10 @@
             @endforeach
         </tbody>
         </table>
+    </div>
+
+    <div class="mt-6">
+        {{ $products->links() }}
     </div>
 </div>
 @endsection
