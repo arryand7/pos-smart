@@ -442,8 +442,65 @@
         }
         .santri-results {
             background: #fff;
-            border-radius: 0.75rem;
-            box-shadow: 0 10px 18px -14px rgba(15, 23, 42, 0.3);
+            border-radius: 1rem;
+            box-shadow: 0 16px 28px -20px rgba(15, 23, 42, 0.35);
+            padding: 0.6rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+        .santri-result-item {
+            width: 100%;
+            min-height: 56px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 0.75rem;
+            text-align: left;
+            padding: 0.75rem 0.9rem;
+            border-radius: 0.9rem;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .santri-result-item:hover {
+            border-color: var(--brand);
+            background: #ecfdf5;
+            transform: translateY(-1px);
+        }
+        .santri-result-item:active {
+            transform: scale(0.99);
+        }
+        .santri-result-meta {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-weight: 600;
+        }
+        .santri-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: rgba(0, 122, 92, 0.12);
+            color: var(--brand);
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+        .santri-balance-chip {
+            background: #e2f7ee;
+            color: #0f7a57;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            border-radius: 999px;
+            border: 1px solid rgba(0, 122, 92, 0.2);
+            white-space: nowrap;
         }
         .clear-santri-btn {
             width: 32px;
@@ -868,7 +925,7 @@
                         </div>
                         <button id="clear-santri-btn" class="clear-santri-btn ml-2" title="Reset Santri">✕</button>
                     </div>
-                    <div class="santri-results border border-slate-200 rounded-lg mt-2 max-h-32 overflow-y-auto" id="santri-results" hidden></div>
+                    <div class="santri-results border border-slate-200 rounded-lg mt-2 max-h-52 overflow-y-auto" id="santri-results" hidden></div>
                 </div>
 
                 <div class="cart-items custom-scrollbar" id="cart-body">

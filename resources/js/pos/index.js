@@ -847,7 +847,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const button = document.createElement('button');
             button.type = 'button';
             button.dataset.santriId = santri.id;
-            button.textContent = `${santri.name} - ${santri.nis}`;
+            button.className = 'santri-result-item';
+            const initials = santri.name
+                ? santri.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+                : 'S';
+            button.innerHTML = `
+                <div class="santri-avatar">${initials}</div>
+                <div>
+                    <div>${santri.name}</div>
+                    <div class="santri-result-meta">${santri.nis}</div>
+                </div>
+                <div class="santri-balance-chip">${currency(santri.wallet_balance)}</div>
+            `;
             elements.santriResults.appendChild(button);
         });
         elements.santriResults.hidden = false;
