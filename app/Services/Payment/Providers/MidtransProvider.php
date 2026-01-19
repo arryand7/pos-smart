@@ -31,15 +31,19 @@ class MidtransProvider implements PaymentProvider
     {
         $this->assertConfigured();
 
+        $orderId = $this->normalizeOrderId(Arr::get($payload, 'transaction_details.order_id'), $payment);
+
         $body = array_merge([
             'transaction_details' => [
-                'order_id' => $payment->provider_reference ?: 'midtrans-'.Str::uuid()->toString(),
+                'order_id' => $orderId,
                 'gross_amount' => (int) ($payment->amount ?? Arr::get($payload, 'amount', 0)),
             ],
             'credit_card' => [
                 'secure' => true,
             ],
         ], $payload);
+        $body['transaction_details']['order_id'] = $orderId;
+        $body['transaction_details']['gross_amount'] = (int) ($body['transaction_details']['gross_amount'] ?? $payment->amount ?? 0);
 
         $response = $this->snapHttp()->post($this->snapEndpoint('/snap/v1/transactions'), $body);
 
@@ -50,7 +54,7 @@ class MidtransProvider implements PaymentProvider
         $data = $response->json();
 
         $payment->provider = $this->getProviderKey();
-        $payment->provider_reference = $body['transaction_details']['order_id'];
+        $payment->provider_reference = $orderId;
         $payment->status = 'pending';
         $payment->request_payload = array_merge($payment->request_payload ?? [], $body);
         $payment->response_payload = array_merge($payment->response_payload ?? [], $data);
@@ -114,7 +118,7 @@ class MidtransProvider implements PaymentProvider
 
     public function supports(string $capability): bool
     {
-        return in_array($capability, ['pos_checkout', 'subscription'], true);
+        return in_array($capability, ['pos_checkout', 'subscription', 'wallet_topup'], true);
     }
 
     protected function http(): PendingRequest
@@ -145,7 +149,8 @@ class MidtransProvider implements PaymentProvider
 
     protected function serverKey(): string
     {
-        $serverKey = Arr::get($this->config, 'credentials.server_key');
+        $serverKey = Arr::get($this->config, 'credentials.server_key')
+            ?? Arr::get($this->config, 'server_key');
 
         if (! $serverKey) {
             throw new PaymentProviderException('Midtrans server key is not configured.');
@@ -170,8 +175,31 @@ class MidtransProvider implements PaymentProvider
 
     protected function assertConfigured(): void
     {
-        if (! Arr::get($this->config, 'credentials.server_key')) {
+        if (! Arr::get($this->config, 'credentials.server_key') && ! Arr::get($this->config, 'server_key')) {
             throw new PaymentProviderException('Midtrans credentials are missing.');
         }
+    }
+
+    protected function normalizeOrderId(?string $orderId, Payment $payment): string
+    {
+        $orderId = $orderId ?: $payment->provider_reference;
+
+        if ($orderId && $this->isValidOrderId($orderId)) {
+            return $orderId;
+        }
+
+        return $this->generateOrderId($payment);
+    }
+
+    protected function isValidOrderId(string $orderId): bool
+    {
+        return (bool) preg_match('/^[A-Za-z0-9_-]{1,50}$/', $orderId);
+    }
+
+    protected function generateOrderId(Payment $payment): string
+    {
+        $base = 'midtrans-'.$payment->id.'-'.Str::upper(Str::random(8));
+
+        return substr($base, 0, 50);
     }
 }

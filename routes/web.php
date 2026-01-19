@@ -21,6 +21,7 @@ use App\Http\Controllers\Finance\DashboardController as FinanceDashboardControll
 use App\Http\Controllers\Finance\AnalyticsController;
 use App\Http\Controllers\Finance\ReportController;
 use App\Http\Controllers\Finance\ReportExportController;
+use App\Http\Controllers\MidtransRedirectController;
 use App\Http\Controllers\PaymentRedirectController;
 use App\Http\Controllers\Portal\GuardianCategoryController;
 use App\Http\Controllers\Portal\GuardianPaymentController;
@@ -44,6 +45,8 @@ Route::get('/sso/login', [SsoController::class, 'redirect'])->name('sso.login');
 Route::get('/sso/callback', [SsoController::class, 'callback'])->name('sso.callback');
 
 Route::get('/produk', [CatalogController::class, 'index'])->name('catalog.index');
+
+Route::get('/payments/midtrans/redirect', MidtransRedirectController::class)->name('payments.midtrans.redirect');
 
 Route::middleware('session.role:bendahara,super_admin')->group(function () {
     Route::get('/dashboard/bendahara', FinanceDashboardController::class)->name('dashboard.finance');
@@ -90,6 +93,7 @@ Route::middleware('session.role:super_admin')->prefix('admin')->name('admin.')->
 
     // Payment Settings
     Route::get('/settings/payments', [PaymentSettingController::class, 'index'])->name('settings.payments');
+    Route::get('/settings/payments/midtrans/checklist', [PaymentSettingController::class, 'midtransChecklist'])->name('settings.payments.midtrans.checklist');
     Route::get('/settings/payments/{provider}', [PaymentSettingController::class, 'edit'])->name('settings.payments.edit');
     Route::put('/settings/payments/{provider}', [PaymentSettingController::class, 'update'])->name('settings.payments.update');
     Route::post('/settings/payments/{provider}/toggle', [PaymentSettingController::class, 'toggleActive'])->name('settings.payments.toggle');

@@ -129,6 +129,9 @@ document.addEventListener('DOMContentLoaded', () => {
         payWallet: document.getElementById('pay-wallet'),
         payGateway: document.getElementById('pay-gateway'),
         payExactButton: document.getElementById('pay-exact-btn'),
+        paymentMethodButtons: document.querySelectorAll('.payment-method-btn'),
+        paymentSections: document.querySelectorAll('[data-payment-section]'),
+        walletWarning: document.getElementById('wallet-warning'),
         submitButton: document.getElementById('submit-btn'),
         statusMessage: document.getElementById('status-message'),
         queueList: document.getElementById('offline-queue'),
@@ -171,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
             wallet: 0,
             gateway: 0,
         },
+        paymentMethod: 'cash',
         isSubmitting: false,
         isSyncing: false,
         offlineQueue: getQueue(),
@@ -196,8 +200,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     }
 
+    function cartSubtotal() {
+        return state.cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+    }
+
     function totals() {
-        const subTotal = state.cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+        const subTotal = cartSubtotal();
         const paymentTotal = Number(state.payments.cash || 0)
             + Number(state.payments.wallet || 0)
             + Number(state.payments.gateway || 0);
@@ -325,6 +333,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 elements.cartBody.appendChild(row);
             });
+        }
+
+        if (state.paymentMethod === 'wallet') {
+            applyWalletAutoAmount();
+        } else {
+            updateWalletWarning();
         }
 
         const { subTotal, paymentTotal, change } = totals();
@@ -456,18 +470,102 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handlePaymentsChange() {
-        state.payments.cash = Number(elements.payCash.value || 0);
-        state.payments.wallet = Number(elements.payWallet.value || 0);
-        state.payments.gateway = Number(elements.payGateway.value || 0);
+        let cash = Number(elements.payCash.value || 0);
+        let wallet = Number(elements.payWallet.value || 0);
+        let gateway = Number(elements.payGateway.value || 0);
+
+        if (state.paymentMethod === 'cash') {
+            wallet = 0;
+            gateway = 0;
+        } else if (state.paymentMethod === 'wallet') {
+            cash = 0;
+            gateway = 0;
+        } else if (state.paymentMethod === 'gateway') {
+            cash = 0;
+            wallet = 0;
+        }
+
+        state.payments.cash = cash;
+        state.payments.wallet = wallet;
+        state.payments.gateway = gateway;
+
+        elements.payCash.value = cash;
+        elements.payWallet.value = wallet;
+        elements.payGateway.value = gateway;
+
         const { paymentTotal, change } = totals();
         elements.totalPayableText.textContent = currency(paymentTotal);
         elements.changeText.textContent = currency(change);
+        updateWalletWarning();
     }
 
     function setPayExact() {
+        if (state.paymentMethod !== 'cash') {
+            return;
+        }
         const { subTotal } = totals();
         elements.payCash.value = subTotal;
         state.payments.cash = subTotal;
+        handlePaymentsChange();
+    }
+
+    function updateWalletWarning() {
+        if (! elements.walletWarning) {
+            return;
+        }
+
+        if (state.paymentMethod !== 'wallet') {
+            elements.walletWarning.hidden = true;
+            return;
+        }
+
+        const subTotal = cartSubtotal();
+        const balance = Number(state.santri?.wallet_balance || 0);
+        const walletAmount = Number(elements.payWallet.value || 0);
+        const insufficient = subTotal > 0 && (walletAmount < subTotal || balance < subTotal);
+
+        elements.walletWarning.hidden = ! insufficient;
+    }
+
+    function applyWalletAutoAmount() {
+        const subTotal = cartSubtotal();
+        const balance = Number(state.santri?.wallet_balance || 0);
+        const amount = Math.min(subTotal, balance);
+        elements.payWallet.value = amount;
+        state.payments.wallet = amount;
+        updateWalletWarning();
+    }
+
+    function setPaymentMethod(method, options = {}) {
+        const target = method || 'cash';
+        state.paymentMethod = target;
+
+        elements.paymentMethodButtons?.forEach((button) => {
+            button.classList.toggle('active', button.dataset.method === target);
+        });
+
+        elements.paymentSections?.forEach((section) => {
+            section.hidden = section.dataset.paymentSection !== target;
+        });
+
+        if (target === 'cash') {
+            if (options.auto !== false) {
+                elements.payCash.value = cartSubtotal();
+            }
+            elements.payWallet.value = 0;
+            elements.payGateway.value = 0;
+        } else if (target === 'gateway') {
+            if (options.auto !== false) {
+                elements.payGateway.value = cartSubtotal();
+            }
+            elements.payCash.value = 0;
+            elements.payWallet.value = 0;
+        } else if (target === 'wallet') {
+            elements.payCash.value = 0;
+            elements.payGateway.value = 0;
+            applyWalletAutoAmount();
+        }
+
         handlePaymentsChange();
     }
 
@@ -486,9 +584,9 @@ document.addEventListener('DOMContentLoaded', () => {
             location_id: state.locationId || null,
             santri_id: state.santriId || null,
             payments: {
-                cash: Number(elements.payCash.value || 0),
-                wallet: Number(elements.payWallet.value || 0),
-                gateway: Number(elements.payGateway.value || 0),
+                cash: Number(state.payments.cash || 0),
+                wallet: Number(state.payments.wallet || 0),
+                gateway: Number(state.payments.gateway || 0),
             },
             items,
         };
@@ -503,6 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.payments.wallet = 0;
         state.payments.gateway = 0;
         clearSantri();
+        setPaymentMethod('cash', { auto: false });
         renderCart();
     }
 
@@ -628,6 +727,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function submitTransaction() {
         const payload = buildPayload();
+        const usesGateway = Number(payload.payments.gateway || 0) > 0;
 
         if (! state.locationId) {
             setStatus('error', 'Pilih lokasi terlebih dahulu.');
@@ -658,6 +758,11 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.submitButton.disabled = true;
 
         try {
+            if (usesGateway && (! navigator.onLine || ! getAuthToken())) {
+                setStatus('error', 'Pembayaran gateway membutuhkan koneksi internet.');
+                return;
+            }
+
             if (! navigator.onLine || ! getAuthToken()) {
                 enqueueTransaction(payload);
                 state.offlineQueue = getQueue();
@@ -669,6 +774,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const response = await axios.post('/api/pos/transactions', payload);
                 setStatus('success', 'Transaksi berhasil diproses.');
                 state.lastReceipt = buildReceipt(payload, response.data, false);
+
+                const redirectUrl = response?.data?.payment_redirect_url;
+                if (redirectUrl) {
+                    const popup = window.open(redirectUrl, '_blank', 'noopener');
+                    if (! popup) {
+                        window.location.href = redirectUrl;
+                    }
+                }
             }
 
             updateReceiptSummary(state.lastReceipt);
@@ -749,6 +862,11 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.santriBalance.textContent = `Saldo: ${currency(santri.wallet_balance)}`;
         elements.payWallet.max = santri.wallet_balance;
         elements.santriResults.hidden = true;
+
+        if (state.paymentMethod === 'wallet') {
+            applyWalletAutoAmount();
+            handlePaymentsChange();
+        }
     }
 
     function clearSantri() {
@@ -762,6 +880,11 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.santriSearch.value = '';
         elements.payWallet.value = 0;
         state.payments.wallet = 0;
+
+        if (state.paymentMethod === 'wallet') {
+            applyWalletAutoAmount();
+        }
+
         handlePaymentsChange();
     }
 
@@ -989,6 +1112,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (input) {
             input.addEventListener('input', handlePaymentsChange);
         }
+    });
+
+    elements.paymentMethodButtons?.forEach((button) => {
+        button.addEventListener('click', () => {
+            setPaymentMethod(button.dataset.method);
+        });
     });
 
     elements.payExactButton.addEventListener('click', setPayExact);

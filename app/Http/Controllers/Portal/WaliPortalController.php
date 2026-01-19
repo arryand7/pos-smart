@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
 use App\Enums\UserRole;
+use App\Models\PaymentProviderConfig;
 use App\Models\ProductCategory;
 use App\Models\Wali;
+use App\Services\Payment\PaymentManager;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 class WaliPortalController extends Controller
@@ -61,21 +62,40 @@ class WaliPortalController extends Controller
             'locked_wallets' => $santris->where('is_wallet_locked', true)->count(),
         ];
 
-        $topupProviders = collect(config('smart.payments.providers', []))
-            ->map(function ($config, $key) {
+        $paymentManager = app(PaymentManager::class);
+
+        $topupProviders = PaymentProviderConfig::query()
+            ->where('is_active', true)
+            ->orderBy('priority')
+            ->get()
+            ->map(function ($config) use ($paymentManager) {
+                if (! $this->providerConfigured($config->provider, $config->config ?? [])) {
+                    return null;
+                }
+
+                try {
+                    $provider = $paymentManager->provider($config->provider);
+                } catch (\Throwable $exception) {
+                    return null;
+                }
+
+                if (! $provider->supports('wallet_topup')) {
+                    return null;
+                }
+
                 return [
-                    'key' => $key,
-                    'label' => Str::upper($config['label'] ?? $key),
-                    'capabilities' => Arr::get($config, 'capabilities', []),
+                    'key' => $config->provider,
+                    'label' => $config->name ?: Str::upper($config->provider),
                 ];
             })
-            ->filter(fn ($provider) => in_array('wallet_topup', $provider['capabilities'], true))
+            ->filter()
             ->values();
 
         if ($topupProviders->isEmpty()) {
+            $fallbackKey = config('smart.payments.default_provider', 'ipaymu');
             $topupProviders = collect([[
-                'key' => config('smart.payments.default_provider', 'ipaymu'),
-                'label' => Str::upper(config('smart.payments.default_provider', 'ipaymu')),
+                'key' => $fallbackKey,
+                'label' => Str::upper($fallbackKey),
             ]]);
         }
 
@@ -93,5 +113,37 @@ class WaliPortalController extends Controller
             'waliOptions' => $waliOptions,
             'activeWaliId' => $activeWaliId ?? $wali?->id,
         ]);
+    }
+
+    protected function providerConfigured(string $providerKey, array $dbConfig): bool
+    {
+        $baseConfig = config("smart.payments.providers.$providerKey", []);
+        $merged = array_merge($baseConfig, $dbConfig);
+        $credentials = $merged['credentials'] ?? [];
+
+        if ($providerKey === 'ipaymu') {
+            $credentials['virtual_account'] = $credentials['virtual_account'] ?? ($merged['virtual_account'] ?? null);
+            $credentials['api_key'] = $credentials['api_key'] ?? ($merged['api_key'] ?? null);
+            $credentials['private_key'] = $credentials['private_key'] ?? ($merged['private_key'] ?? null);
+
+            return ! empty($credentials['virtual_account'])
+                && ! empty($credentials['api_key'])
+                && ! empty($credentials['private_key']);
+        }
+
+        if ($providerKey === 'midtrans') {
+            $credentials['server_key'] = $credentials['server_key'] ?? ($merged['server_key'] ?? null);
+
+            return ! empty($credentials['server_key']);
+        }
+
+        if ($providerKey === 'doku') {
+            $credentials['client_id'] = $credentials['client_id'] ?? ($merged['client_id'] ?? null);
+            $credentials['secret_key'] = $credentials['secret_key'] ?? ($merged['secret_key'] ?? null);
+
+            return ! empty($credentials['client_id']) && ! empty($credentials['secret_key']);
+        }
+
+        return true;
     }
 }

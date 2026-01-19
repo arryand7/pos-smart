@@ -580,10 +580,30 @@
             padding: 0.85rem;
             font-size: 1rem;
         }
-        .payment-grid {
+        .payment-methods {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 0.5rem;
+        }
+        .payment-method-btn {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--muted);
+            padding: 0.55rem 0.75rem;
+            border-radius: 0.75rem;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .payment-method-btn.active {
+            border-color: var(--brand);
+            color: var(--brand);
+            background: var(--brand-soft);
+            box-shadow: inset 0 0 0 1px rgba(0, 122, 92, 0.1);
+        }
+        .payment-section {
+            margin-top: 0.5rem;
         }
         .pay-field {
             display: flex;
@@ -628,6 +648,20 @@
             color: var(--text);
             padding-top: 0.5rem;
             border-top: 1px dashed var(--border);
+        }
+        .total-amount {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.1rem;
+        }
+        .wallet-warning {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            color: #dc2626;
+            font-weight: 600;
         }
         
         .pay-btn {
@@ -706,8 +740,8 @@
             }
         }
         @media (max-width: 640px) {
-            .payment-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+            .payment-methods {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
         }
         
@@ -844,26 +878,41 @@
                 <div class="cart-footer">
                     <div class="summary-row"><span>Subtotal</span><span id="subtotal-text">Rp0</span></div>
                     
-                    <!-- Payment Inputs -->
-                    <div class="payment-grid">
+                    <!-- Payment Method -->
+                    <div class="payment-methods">
+                        <button type="button" class="payment-method-btn active" data-method="cash">Tunai</button>
+                        <button type="button" class="payment-method-btn" data-method="wallet">Saldo</button>
+                        <button type="button" class="payment-method-btn" data-method="gateway">Gateway</button>
+                    </div>
+
+                    <div class="payment-section" data-payment-section="cash">
                         <label class="pay-field">
-                            <span class="pay-label">Tunai</span>
+                            <span class="pay-label">Jumlah Tunai</span>
                             <input id="pay-cash" type="number" class="pay-input" value="0">
                         </label>
+                        <button type="button" class="btn secondary w-full text-sm mt-2" id="pay-exact-btn">💵 Uang Pas</button>
+                    </div>
+
+                    <div class="payment-section" data-payment-section="wallet" hidden>
                         <label class="pay-field">
-                            <span class="pay-label">Saldo</span>
-                            <input id="pay-wallet" type="number" class="pay-input" value="0">
+                            <span class="pay-label">Saldo Digunakan</span>
+                            <input id="pay-wallet" type="number" class="pay-input" value="0" readonly>
                         </label>
+                    </div>
+
+                    <div class="payment-section" data-payment-section="gateway" hidden>
                         <label class="pay-field">
-                            <span class="pay-label">Gateway</span>
+                            <span class="pay-label">Jumlah Gateway</span>
                             <input id="pay-gateway" type="number" class="pay-input" value="0">
                         </label>
                     </div>
-                    <button type="button" class="btn secondary w-full text-sm" id="pay-exact-btn">💵 Uang Pas</button>
 
                     <div class="summary-total">
                         <span>Total</span>
-                        <span id="total-text" class="text-emerald-700">Rp0</span>
+                        <div class="total-amount">
+                            <span id="total-text" class="text-emerald-700">Rp0</span>
+                            <span id="wallet-warning" class="wallet-warning" hidden>Saldo tidak cukup</span>
+                        </div>
                     </div>
                     <div class="flex justify-between text-sm font-bold text-slate-500">
                         <span>Kembalian</span>

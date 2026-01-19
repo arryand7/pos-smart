@@ -90,9 +90,35 @@ class PaymentManager
             $config = array_merge($config, $dbConfig->config ?? []);
         }
 
+        $config = $this->normalizeConfig($providerKey, $config);
+
         if (array_key_exists($providerKey, $this->runtimeConfig)) {
             $config = array_merge($config, Arr::wrap($this->runtimeConfig[$providerKey]));
         }
+
+        return $config;
+    }
+
+    protected function normalizeConfig(string $providerKey, array $config): array
+    {
+        $credentials = $config['credentials'] ?? [];
+
+        if ($providerKey === 'midtrans') {
+            $credentials['server_key'] = $credentials['server_key'] ?? ($config['server_key'] ?? null);
+            $credentials['client_key'] = $credentials['client_key'] ?? ($config['client_key'] ?? null);
+            $credentials['merchant_id'] = $credentials['merchant_id'] ?? ($config['merchant_id'] ?? null);
+        } elseif ($providerKey === 'ipaymu') {
+            $credentials['virtual_account'] = $credentials['virtual_account'] ?? ($config['virtual_account'] ?? null);
+            $credentials['api_key'] = $credentials['api_key'] ?? ($config['api_key'] ?? null);
+            $credentials['private_key'] = $credentials['private_key'] ?? ($config['private_key'] ?? null);
+            $credentials['merchant_code'] = $credentials['merchant_code'] ?? ($config['merchant_code'] ?? null);
+        } elseif ($providerKey === 'doku') {
+            $credentials['client_id'] = $credentials['client_id'] ?? ($config['client_id'] ?? null);
+            $credentials['secret_key'] = $credentials['secret_key'] ?? ($config['secret_key'] ?? null);
+            $credentials['merchant_code'] = $credentials['merchant_code'] ?? ($config['merchant_code'] ?? null);
+        }
+
+        $config['credentials'] = array_filter($credentials, fn ($value) => $value !== null);
 
         return $config;
     }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\POS\PosService;
+use App\Services\Payment\PaymentService;
 use Illuminate\Support\Arr;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,8 +15,10 @@ use Illuminate\Validation\Rule;
 
 class TransactionController extends Controller
 {
-    public function __construct(private readonly PosService $posService)
-    {
+    public function __construct(
+        private readonly PosService $posService,
+        private readonly PaymentService $paymentService,
+    ) {
     }
 
     public function index(Request $request): JsonResponse
@@ -48,6 +51,7 @@ class TransactionController extends Controller
             'payments.cash' => ['nullable', 'numeric', 'min:0'],
             'payments.wallet' => ['nullable', 'numeric', 'min:0'],
             'payments.gateway' => ['nullable', 'numeric', 'min:0'],
+            'gateway_provider' => ['nullable', 'string', 'max:30'],
             'primary_payment_method' => ['nullable', 'string', 'max:30'],
             'processed_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
@@ -70,8 +74,56 @@ class TransactionController extends Controller
         $kasir = $this->resolveKasir($actingUser, $data['kasir_id'] ?? null);
 
         $transaction = $this->posService->createTransaction($data, $kasir);
+        $transaction->load('items');
 
-        return response()->json($transaction->load('items'), 201);
+        $payload = $transaction->toArray();
+
+        $gatewayAmount = (float) data_get($data, 'payments.gateway', 0);
+        if ($gatewayAmount > 0) {
+            $provider = $data['gateway_provider'] ?? config('smart.payments.default_provider', 'midtrans');
+            $items = $transaction->items->map(function ($item) {
+                return [
+                    'id' => $item->product_id ?? $item->id,
+                    'name' => $item->product_name,
+                    'price' => $item->unit_price,
+                    'quantity' => $item->quantity,
+                ];
+            })->values()->all();
+
+            if ($gatewayAmount < (float) $transaction->total_amount) {
+                $items = [[
+                    'id' => 'GATEWAY',
+                    'name' => 'Pembayaran Gateway POS',
+                    'price' => $gatewayAmount,
+                    'quantity' => 1,
+                ]];
+            }
+
+            $payment = $this->paymentService->initiatePosGateway(
+                $transaction,
+                $gatewayAmount,
+                $provider,
+                [
+                    'channel' => 'pos',
+                    'items' => $items,
+                    'transaction_details' => [
+                        'order_id' => $transaction->reference,
+                        'gross_amount' => (int) $gatewayAmount,
+                    ],
+                ]
+            );
+
+            $payload['payment'] = [
+                'id' => $payment->id,
+                'provider' => $payment->provider,
+                'status' => $payment->status,
+            ];
+            $payload['payment_redirect_url'] = data_get($payment->metadata, 'redirect_url')
+                ?? data_get($payment->response_payload, 'redirect_url')
+                ?? data_get($payment->response_payload, 'Data.Url');
+        }
+
+        return response()->json($payload, 201);
     }
 
     public function sync(Request $request): JsonResponse

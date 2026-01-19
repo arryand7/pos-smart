@@ -45,6 +45,30 @@
             </div>
         @endif
 
+        @if(session('payment_redirect_url'))
+            <div class="mb-4 bg-white text-slate-700 px-4 py-3 rounded-xl text-sm font-medium border border-slate-200">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <p class="font-semibold text-slate-800">Link pembayaran siap</p>
+                        <p class="text-xs text-slate-500 mt-1">Jika tidak terbuka otomatis, klik tombol di samping.</p>
+                    </div>
+                    <a href="{{ session('payment_redirect_url') }}" target="_blank" rel="noopener" class="px-3 py-2 rounded-lg bg-[#007A5C] text-white text-xs font-bold">Buka Pembayaran</a>
+                </div>
+            </div>
+            <script>
+                (function () {
+                    const url = @json(session('payment_redirect_url'));
+                    if (!url) return;
+                    setTimeout(() => {
+                        const popup = window.open(url, '_blank', 'noopener');
+                        if (!popup) {
+                            // Popup blocked, user can click the button above.
+                        }
+                    }, 400);
+                })();
+            </script>
+        @endif
+
         @if(session('error'))
             <div class="mb-4 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm font-medium border border-red-100">
                 {{ session('error') }}

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
 use App\Enums\UserRole;
+use App\Models\PaymentProviderConfig;
 use App\Models\Santri;
 use App\Services\Payment\PaymentService;
 use Illuminate\Http\RedirectResponse;
@@ -34,7 +35,10 @@ class WalletTopupController extends Controller
             'payment_method' => ['nullable', 'string'],
         ]);
 
-        $provider = $data['provider'] ?: config('smart.payments.default_provider', 'ipaymu');
+        $provider = $data['provider'] ?? null;
+        if ($provider && ! $this->providerConfigured($provider)) {
+            $provider = null;
+        }
         $redirectParams = $user->hasRole(UserRole::SUPER_ADMIN) ? ['wali_id' => $santri->wali_id] : [];
         $portalRedirect = route('portal.wali', $redirectParams);
 
@@ -56,9 +60,49 @@ class WalletTopupController extends Controller
         $redirectUrl = data_get($payment->metadata, 'redirect_url')
             ?? data_get($payment->response_payload, 'Data.Url');
 
+        if ($redirectUrl) {
+            return redirect()->away($redirectUrl);
+        }
+
         return redirect()
             ->route('portal.wali', $redirectParams)
-            ->with('status', "Link pembayaran untuk {$santri->name} berhasil dibuat.")
-            ->with('payment_redirect_url', $redirectUrl);
+            ->with('error', 'Link pembayaran belum tersedia. Silakan cek konfigurasi payment gateway.');
+    }
+
+    protected function providerConfigured(string $providerKey): bool
+    {
+        $config = PaymentProviderConfig::query()
+            ->where('provider', $providerKey)
+            ->where('is_active', true)
+            ->first();
+
+        $baseConfig = config("smart.payments.providers.$providerKey", []);
+        $merged = array_merge($baseConfig, $config?->config ?? []);
+        $credentials = $merged['credentials'] ?? [];
+
+        if ($providerKey === 'ipaymu') {
+            $credentials['virtual_account'] = $credentials['virtual_account'] ?? ($merged['virtual_account'] ?? null);
+            $credentials['api_key'] = $credentials['api_key'] ?? ($merged['api_key'] ?? null);
+            $credentials['private_key'] = $credentials['private_key'] ?? ($merged['private_key'] ?? null);
+
+            return ! empty($credentials['virtual_account'])
+                && ! empty($credentials['api_key'])
+                && ! empty($credentials['private_key']);
+        }
+
+        if ($providerKey === 'midtrans') {
+            $credentials['server_key'] = $credentials['server_key'] ?? ($merged['server_key'] ?? null);
+
+            return ! empty($credentials['server_key']);
+        }
+
+        if ($providerKey === 'doku') {
+            $credentials['client_id'] = $credentials['client_id'] ?? ($merged['client_id'] ?? null);
+            $credentials['secret_key'] = $credentials['secret_key'] ?? ($merged['secret_key'] ?? null);
+
+            return ! empty($credentials['client_id']) && ! empty($credentials['secret_key']);
+        }
+
+        return true;
     }
 }

@@ -39,6 +39,31 @@ class PaymentSettingController extends Controller
         return view('admin.settings.payments.edit', compact('config'));
     }
 
+    public function midtransChecklist(): View
+    {
+        $config = PaymentProviderConfig::where('provider', 'midtrans')->first();
+
+        $credentials = $config?->config['credentials'] ?? [];
+
+        $data = [
+            'mode' => $config?->config['mode'] ?? config('smart.payments.providers.midtrans.mode', 'sandbox'),
+            'merchant_id' => $credentials['merchant_id'] ?? ($config?->config['merchant_id'] ?? ''),
+            'client_key' => $credentials['client_key'] ?? ($config?->config['client_key'] ?? ''),
+            'server_key' => $credentials['server_key'] ?? ($config?->config['server_key'] ?? ''),
+        ];
+
+        $urls = [
+            'payment_notification' => url('/api/payments/webhook/midtrans'),
+            'recurring_notification' => url('/api/payments/webhook/midtrans'),
+            'pay_account_notification' => url('/api/payments/webhook/midtrans'),
+            'finish_redirect' => url('/payments/midtrans/redirect?status=success'),
+            'unfinish_redirect' => url('/payments/midtrans/redirect?status=pending'),
+            'error_redirect' => url('/payments/midtrans/redirect?status=failed'),
+        ];
+
+        return view('admin.settings.payments.midtrans-checklist', compact('data', 'urls'));
+    }
+
     public function update(Request $request, string $provider): RedirectResponse
     {
         $config = PaymentProviderConfig::where('provider', $provider)->firstOrFail();

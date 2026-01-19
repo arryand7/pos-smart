@@ -8,6 +8,9 @@
         <h2 class="text-xl font-semibold text-slate-800">Pengaturan Payment Gateway</h2>
         <p class="text-sm text-slate-500">Kelola integrasi pembayaran untuk top-up wallet santri.</p>
     </div>
+    <div class="flex flex-wrap gap-2 mb-4">
+        <a href="{{ route('admin.settings.payments.midtrans.checklist') }}" class="btn btn-outline btn-sm">Midtrans Checklist</a>
+    </div>
 
     @if(session('status'))
         <div class="alert alert-success mb-4 flex items-center gap-2">

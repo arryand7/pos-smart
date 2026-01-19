@@ -37,7 +37,7 @@ return [
                 'redirect_url' => env('IPAYMU_REDIRECT_URL'),
             ],
             'midtrans' => [
-                'capabilities' => ['pos_checkout', 'subscription'],
+                'capabilities' => ['pos_checkout', 'subscription', 'wallet_topup'],
                 'mode' => env('MIDTRANS_MODE', 'sandbox'),
                 'credentials' => [
                     'server_key' => env('MIDTRANS_SERVER_KEY'),
