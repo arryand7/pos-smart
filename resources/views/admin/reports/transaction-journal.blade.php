@@ -82,12 +82,21 @@
                         <span class="px-2 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-600">PENDING</span>
                     @elseif($trx->status == 'cancelled')
                         <span class="px-2 py-1 rounded-full text-xs font-bold bg-red-50 text-red-600">BATAL</span>
+                        @if(data_get($trx->metadata, 'cancel_reason'))
+                            <div class="text-xs text-red-600 mt-1">Alasan: {{ data_get($trx->metadata, 'cancel_reason') }}</div>
+                        @endif
                     @else
                         <span class="px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">{{ strtoupper($trx->status) }}</span>
                     @endif
                 </td>
                 <td class="space-x-2">
-                    <button class="text-slate-500 hover:text-emerald-600 p-1" title="Lihat Detail">
+                    <button type="button" class="text-slate-500 hover:text-emerald-600 p-1 inline-flex transaction-detail-btn"
+                        data-url="{{ route('admin.reports.transactions.show', $trx) }}?embed=1"
+                        data-receipt-58="{{ route('admin.reports.transactions.receipt', $trx) }}?size=58"
+                        data-receipt-80="{{ route('admin.reports.transactions.receipt', $trx) }}?size=80"
+                        data-receipt-pdf-58="{{ route('admin.reports.transactions.receipt.pdf', $trx) }}?size=58"
+                        data-receipt-pdf-80="{{ route('admin.reports.transactions.receipt.pdf', $trx) }}?size=80"
+                        title="Lihat Detail">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     </button>
                     @if(auth()->user()?->hasRole(\App\Enums\UserRole::SUPER_ADMIN) && $trx->status !== 'cancelled')
@@ -140,6 +149,91 @@
                 form.submit();
             });
         });
+
+        const modal = document.getElementById('transaction-modal');
+        const frame = document.getElementById('transaction-frame');
+        const closeBtn = document.getElementById('transaction-modal-close');
+        const printBtn = document.getElementById('transaction-print-btn');
+        const thermal58Btn = document.getElementById('transaction-thermal-58');
+        const thermal80Btn = document.getElementById('transaction-thermal-80');
+        const pdf58Btn = document.getElementById('transaction-pdf-58');
+        const pdf80Btn = document.getElementById('transaction-pdf-80');
+        let receipt58Url = '';
+        let receipt80Url = '';
+        let receiptPdf58Url = '';
+        let receiptPdf80Url = '';
+
+        function closeModal() {
+            modal.hidden = true;
+            frame.src = 'about:blank';
+            document.body.classList.remove('modal-open');
+        }
+
+        document.querySelectorAll('.transaction-detail-btn').forEach((button) => {
+            button.addEventListener('click', () => {
+                const url = button.dataset.url;
+                if (! url) {
+                    return;
+                }
+                frame.src = url;
+                receipt58Url = button.dataset.receipt58 || '';
+                receipt80Url = button.dataset.receipt80 || '';
+                receiptPdf58Url = button.dataset.receiptPdf58 || '';
+                receiptPdf80Url = button.dataset.receiptPdf80 || '';
+                if (thermal58Btn) {
+                    thermal58Btn.href = receipt58Url || '#';
+                }
+                if (thermal80Btn) {
+                    thermal80Btn.href = receipt80Url || '#';
+                }
+                if (pdf58Btn) {
+                    pdf58Btn.href = receiptPdf58Url || '#';
+                }
+                if (pdf80Btn) {
+                    pdf80Btn.href = receiptPdf80Url || '#';
+                }
+                modal.hidden = false;
+                document.body.classList.add('modal-open');
+            });
+        });
+
+        closeBtn?.addEventListener('click', closeModal);
+        modal?.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+        printBtn?.addEventListener('click', () => {
+            if (frame.contentWindow) {
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
+            }
+        });
+
+        [thermal58Btn, thermal80Btn, pdf58Btn, pdf80Btn].forEach((btn) => {
+            btn?.addEventListener('click', (event) => {
+                if (! btn.getAttribute('href') || btn.getAttribute('href') === '#') {
+                    event.preventDefault();
+                }
+            });
+        });
     });
 </script>
+
+<div class="transaction-modal" id="transaction-modal" hidden>
+    <div class="transaction-modal-card">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-slate-800">Detail Transaksi</h3>
+            <button type="button" class="btn btn-outline btn-sm" id="transaction-modal-close">✕</button>
+        </div>
+        <iframe id="transaction-frame" class="transaction-frame" title="Detail Transaksi"></iframe>
+        <div class="mt-3 flex flex-wrap justify-end gap-2">
+            <a class="btn btn-outline" id="transaction-thermal-58" href="#" target="_blank" rel="noopener">Thermal 58mm</a>
+            <a class="btn btn-outline" id="transaction-thermal-80" href="#" target="_blank" rel="noopener">Thermal 80mm</a>
+            <a class="btn btn-outline" id="transaction-pdf-58" href="#" target="_blank" rel="noopener">PDF 58mm</a>
+            <a class="btn btn-outline" id="transaction-pdf-80" href="#" target="_blank" rel="noopener">PDF 80mm</a>
+            <button type="button" class="btn btn-secondary" id="transaction-print-btn">Cetak</button>
+        </div>
+    </div>
+</div>
 @endsection

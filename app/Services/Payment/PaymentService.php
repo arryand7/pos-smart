@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Services\Accounting\AccountingService;
 use App\Services\Payment\Exceptions\InvalidSignatureException;
 use App\Services\Payment\Exceptions\PaymentProviderException;
+use App\Services\Payment\Exceptions\PaymentProviderHttpException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -123,6 +124,33 @@ class PaymentService
         $this->syncPaymentPayable($payment);
 
         return $payment;
+    }
+
+    public function requestRefund(Payment $payment, ?float $amount = null, ?string $reason = null): Payment
+    {
+        $amount = $amount ?? (float) $payment->amount;
+
+        if ($amount <= 0) {
+            return $payment;
+        }
+
+        if (in_array($payment->status, ['refunded', 'refund_pending'], true)) {
+            return $payment;
+        }
+
+        $provider = $this->manager->provider($payment->provider);
+
+        if (! method_exists($provider, 'refund')) {
+            throw new PaymentProviderException('Provider tidak mendukung refund otomatis.');
+        }
+
+        try {
+            return $provider->refund($payment, $amount, $reason);
+        } catch (PaymentProviderHttpException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            throw new PaymentProviderException($exception->getMessage());
+        }
     }
 
     protected function logWebhookFailure(string $providerKey, Request $request, int $status, ?string $message = null): void

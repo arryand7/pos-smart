@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\WalletTransaction;
 use App\Models\ActivityLog;
 use App\Services\Accounting\AccountingService;
+use App\Services\Payment\PaymentService;
 use App\Services\Wallet\WalletService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ class PosService
     public function __construct(
         private readonly WalletService $walletService,
         private readonly AccountingService $accountingService,
+        private readonly PaymentService $paymentService,
     ) {
     }
 
@@ -176,8 +178,25 @@ class PosService
                 }
             }
 
+            $refundErrors = [];
+
             foreach ($transaction->payments as $payment) {
-                if (in_array($payment->status, ['settlement', 'capture', 'completed', 'paid', 'success'], true)) {
+                $status = strtolower((string) $payment->status);
+
+                if (in_array($status, ['settlement', 'capture', 'completed', 'paid', 'success'], true)) {
+                    try {
+                        $this->paymentService->requestRefund($payment, (float) $payment->amount, $reason);
+                    } catch (\Throwable $exception) {
+                        $refundErrors[] = [
+                            'payment_id' => $payment->id,
+                            'provider' => $payment->provider,
+                            'message' => $exception->getMessage(),
+                        ];
+                    }
+                    continue;
+                }
+
+                if (in_array($status, ['refunded', 'refund_pending'], true)) {
                     continue;
                 }
 
@@ -191,6 +210,7 @@ class PosService
                 'cancelled_by' => $actor->id,
                 'cancelled_at' => now()->toISOString(),
                 'cancel_reason' => $reason,
+                'refund_errors' => empty($refundErrors) ? null : $refundErrors,
             ]);
             $transaction->save();
 

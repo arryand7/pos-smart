@@ -652,6 +652,45 @@
         text-align: center;
     }
 
+    .transaction-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 70;
+        padding: 1.5rem;
+    }
+
+    .transaction-modal[hidden] {
+        display: none;
+    }
+
+    .transaction-modal-card {
+        background: #fff;
+        width: min(96vw, 980px);
+        max-height: 90vh;
+        border-radius: 1.25rem;
+        padding: 1.25rem;
+        box-shadow: 0 30px 50px -30px rgba(15, 23, 42, 0.5);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .transaction-frame {
+        width: 100%;
+        flex: 1;
+        min-height: 60vh;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        background: #f8fafc;
+    }
+
+    body.modal-open {
+        overflow: hidden;
+    }
+
     .sidebar-overlay {
         position: fixed;
         inset: 0;

@@ -12,8 +12,12 @@ use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\WalletTransaction;
 use App\Services\POS\PosService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Endroid\QrCode\Builder\Builder;
+use Picqer\Barcode\BarcodeGeneratorPNG;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ReportController extends Controller
 {
@@ -90,6 +94,117 @@ class ReportController extends Controller
         $transactions = $query->paginate($perPage)->withQueryString();
 
         return view('admin.reports.transaction-journal', compact('transactions', 'startDate', 'endDate'));
+    }
+
+    public function showTransaction(Transaction $transaction): View
+    {
+        $transaction->load(['items', 'location', 'kasir', 'santri', 'payments']);
+
+        $metadata = $transaction->metadata ?? [];
+        if (empty($metadata['verification_token'])) {
+            $metadata['verification_token'] = Str::uuid()->toString();
+            $transaction->metadata = $metadata;
+            $transaction->save();
+        }
+
+        $verificationUrl = route('transactions.verify', ['token' => $metadata['verification_token']]);
+
+        return view('admin.reports.transaction-invoice', compact('transaction', 'verificationUrl'));
+    }
+
+    public function receipt(Transaction $transaction, Request $request): View
+    {
+        $transaction->load(['items', 'location', 'kasir', 'santri', 'payments']);
+        $size = $request->string('size', '80')->toString();
+        $size = in_array($size, ['58', '80'], true) ? $size : '80';
+
+        $metadata = $transaction->metadata ?? [];
+        if (empty($metadata['verification_token'])) {
+            $metadata['verification_token'] = Str::uuid()->toString();
+            $transaction->metadata = $metadata;
+            $transaction->save();
+        }
+
+        $verificationUrl = route('transactions.verify', ['token' => $metadata['verification_token']]);
+
+        return view('admin.reports.transaction-receipt', compact('transaction', 'size', 'verificationUrl'));
+    }
+
+    public function receiptPdf(Transaction $transaction, Request $request)
+    {
+        $transaction->load(['items', 'location', 'kasir', 'santri', 'payments']);
+        $size = $request->string('size', '80')->toString();
+        $size = in_array($size, ['58', '80'], true) ? $size : '80';
+
+        $metadata = $transaction->metadata ?? [];
+        if (empty($metadata['verification_token'])) {
+            $metadata['verification_token'] = Str::uuid()->toString();
+            $transaction->metadata = $metadata;
+            $transaction->save();
+        }
+
+        $verificationUrl = route('transactions.verify', ['token' => $metadata['verification_token']]);
+
+        $qrDataUri = Builder::create()
+            ->data($verificationUrl)
+            ->size(140)
+            ->margin(1)
+            ->build()
+            ->getDataUri();
+
+        $barcodeGenerator = new BarcodeGeneratorPNG();
+        $barcodeDataUri = 'data:image/png;base64,'.base64_encode(
+            $barcodeGenerator->getBarcode($transaction->reference, $barcodeGenerator::TYPE_CODE_128)
+        );
+
+        $paperWidth = $size === '58' ? 58 : 80;
+        $paperHeight = max(200, 80 + ($transaction->items->count() * 6));
+        $points = fn ($mm) => $mm * 2.83465;
+
+        $pdf = Pdf::loadView('admin.reports.transaction-receipt-pdf', [
+            'transaction' => $transaction,
+            'size' => $size,
+            'verificationUrl' => $verificationUrl,
+            'qrDataUri' => $qrDataUri,
+            'barcodeDataUri' => $barcodeDataUri,
+        ])->setPaper([0, 0, $points($paperWidth), $points($paperHeight)]);
+
+        return $pdf->stream("struk-{$transaction->reference}.pdf");
+    }
+
+    public function invoicePdf(Transaction $transaction)
+    {
+        $transaction->load(['items', 'location', 'kasir', 'santri', 'payments']);
+
+        $metadata = $transaction->metadata ?? [];
+        if (empty($metadata['verification_token'])) {
+            $metadata['verification_token'] = Str::uuid()->toString();
+            $transaction->metadata = $metadata;
+            $transaction->save();
+        }
+
+        $verificationUrl = route('transactions.verify', ['token' => $metadata['verification_token']]);
+
+        $qrDataUri = Builder::create()
+            ->data($verificationUrl)
+            ->size(140)
+            ->margin(1)
+            ->build()
+            ->getDataUri();
+
+        $barcodeGenerator = new BarcodeGeneratorPNG();
+        $barcodeDataUri = 'data:image/png;base64,'.base64_encode(
+            $barcodeGenerator->getBarcode($transaction->reference, $barcodeGenerator::TYPE_CODE_128)
+        );
+
+        $pdf = Pdf::loadView('admin.reports.transaction-invoice-pdf', [
+            'transaction' => $transaction,
+            'verificationUrl' => $verificationUrl,
+            'qrDataUri' => $qrDataUri,
+            'barcodeDataUri' => $barcodeDataUri,
+        ])->setPaper('a4');
+
+        return $pdf->stream("invoice-{$transaction->reference}.pdf");
     }
 
     public function salesReport(Request $request): View

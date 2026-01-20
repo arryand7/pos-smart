@@ -5,9 +5,13 @@ import './pwa/registerServiceWorker';
 import $ from 'jquery';
 import DataTable from 'datatables.net-dt';
 import 'datatables.net-buttons-dt';
+import 'datatables.net-buttons/js/buttons.print';
+import 'datatables.net-buttons/js/buttons.html5';
 import 'datatables.net-responsive-dt';
 import flatpickr from "flatpickr";
 import Chart from 'chart.js/auto';
+import QRCode from 'qrcode';
+import JsBarcode from 'jsbarcode';
 
 // Styles
 import 'datatables.net-dt/css/dataTables.dataTables.min.css';
@@ -20,6 +24,8 @@ window.$ = window.jQuery = $;
 window.DataTable = DataTable;
 window.flatpickr = flatpickr;
 window.Chart = Chart;
+window.QRCode = QRCode;
+window.JsBarcode = JsBarcode;
 
 // Initialize DataTables Defaults
 $.extend(true, $.fn.dataTable.defaults, {

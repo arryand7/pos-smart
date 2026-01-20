@@ -24,6 +24,7 @@ use App\Http\Controllers\Finance\ReportExportController;
 use App\Http\Controllers\MidtransRedirectController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\PaymentRedirectController;
+use App\Http\Controllers\TransactionVerifyController;
 use App\Http\Controllers\Portal\GuardianCategoryController;
 use App\Http\Controllers\Portal\GuardianPaymentController;
 use App\Http\Controllers\Portal\GuardianSantriController;
@@ -46,6 +47,8 @@ Route::get('/sso/login', [SsoController::class, 'redirect'])->name('sso.login');
 Route::get('/sso/callback', [SsoController::class, 'callback'])->name('sso.callback');
 
 Route::get('/produk', [CatalogController::class, 'index'])->name('catalog.index');
+
+Route::get('/verify/transaction/{token}', TransactionVerifyController::class)->name('transactions.verify');
 
 Route::get('/payments/midtrans/redirect', MidtransRedirectController::class)->name('payments.midtrans.redirect');
 Route::get('/media/products/{path}', MediaController::class)->where('path', '.*')->name('media.products');
@@ -141,6 +144,10 @@ Route::middleware('session.role:admin,super_admin')->prefix('admin')->name('admi
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/', [AdminReportController::class, 'index'])->name('index');
         Route::get('/transactions', [AdminReportController::class, 'transactionJournal'])->name('transactions');
+        Route::get('/transactions/{transaction}', [AdminReportController::class, 'showTransaction'])->name('transactions.show');
+        Route::get('/transactions/{transaction}/invoice/pdf', [AdminReportController::class, 'invoicePdf'])->name('transactions.invoice.pdf');
+        Route::get('/transactions/{transaction}/receipt', [AdminReportController::class, 'receipt'])->name('transactions.receipt');
+        Route::get('/transactions/{transaction}/receipt/pdf', [AdminReportController::class, 'receiptPdf'])->name('transactions.receipt.pdf');
         Route::get('/sales', [AdminReportController::class, 'salesReport'])->name('sales');
         Route::get('/wallet', [AdminReportController::class, 'walletReport'])->name('wallet');
     });

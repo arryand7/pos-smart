@@ -176,7 +176,9 @@
                     </div>
                 @endif
 
-                @include('partials.portal-switcher')
+                <div class="portal-switcher">
+                    @include('partials.portal-switcher')
+                </div>
 
                 @yield('content')
             </div>

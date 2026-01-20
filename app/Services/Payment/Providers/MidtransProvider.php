@@ -116,6 +116,44 @@ class MidtransProvider implements PaymentProvider
         return $payment;
     }
 
+    public function refund(Payment $payment, float $amount, ?string $reason = null): Payment
+    {
+        $this->assertConfigured();
+
+        $orderId = $payment->provider_reference;
+        if (! $orderId) {
+            throw new PaymentProviderException('Midtrans order id tidak ditemukan.');
+        }
+
+        $refundKey = 'refund-'.$payment->id.'-'.now()->format('YmdHis');
+        $payload = [
+            'refund_key' => $refundKey,
+            'amount' => (int) $amount,
+            'reason' => $reason ?: 'Pembatalan transaksi',
+        ];
+
+        $response = $this->http()->post($this->endpoint('/v2/'.$orderId.'/refund'), $payload);
+
+        if (! $response->successful()) {
+            throw new PaymentProviderHttpException($response, 'Midtrans refund failed.');
+        }
+
+        $data = $response->json();
+        $status = strtolower((string) ($data['status'] ?? $data['transaction_status'] ?? 'refunded'));
+        $normalized = str_contains($status, 'pending') ? 'refund_pending' : 'refunded';
+
+        $payment->status = $normalized;
+        $payment->response_payload = array_merge($payment->response_payload ?? [], ['refund' => $data]);
+        $payment->metadata = array_merge($payment->metadata ?? [], [
+            'refund' => $data,
+            'refund_key' => $refundKey,
+            'refund_requested_at' => now()->toISOString(),
+        ]);
+        $payment->save();
+
+        return $payment;
+    }
+
     public function supports(string $capability): bool
     {
         return in_array($capability, ['pos_checkout', 'subscription', 'wallet_topup'], true);

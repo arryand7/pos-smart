@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Str;
 
 class Transaction extends Model
 {
@@ -57,6 +58,20 @@ class Transaction extends Model
             'synced_at' => 'datetime',
             'metadata' => 'array',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $transaction) {
+            $metadata = $transaction->metadata ?? [];
+            if (! is_array($metadata)) {
+                $metadata = (array) $metadata;
+            }
+            if (empty($metadata['verification_token'])) {
+                $metadata['verification_token'] = Str::uuid()->toString();
+                $transaction->metadata = $metadata;
+            }
+        });
     }
 
     public function location(): BelongsTo
