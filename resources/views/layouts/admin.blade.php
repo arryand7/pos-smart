@@ -99,10 +99,10 @@
                         <a href="{{ route('admin.settings.email') }}" class="sidebar-link {{ request()->routeIs('admin.settings.email*') ? 'active' : '' }}">
                             <span>📧</span> Email & SMTP
                         </a>
+                        <a href="{{ route('admin.settings.branding') }}" class="sidebar-link {{ request()->routeIs('admin.settings.branding*') ? 'active' : '' }}">
+                            <span>🎨</span> Branding
+                        </a>
                     @endif
-                    <a href="{{ route('admin.settings.branding') }}" class="sidebar-link {{ request()->routeIs('admin.settings.branding*') ? 'active' : '' }}">
-                        <span>🎨</span> Branding
-                    </a>
                     <a href="{{ route('admin.settings.accounting') }}" class="sidebar-link {{ request()->routeIs('admin.settings.accounting*') ? 'active' : '' }}">
                         <span>📊</span> Akuntansi
                     </a>

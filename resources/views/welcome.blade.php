@@ -24,7 +24,25 @@
                 <!-- Login Button -->
                 <div class="flex items-center gap-4">
                     @auth
-                        <a href="{{ url('/dashboard') }}" class="px-5 py-2.5 rounded-full bg-[#007A5C] text-white font-semibold shadow-lg shadow-emerald-600/20 hover:bg-[#00624a] hover:shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5">
+                        @php
+                            $sessionRole = data_get(session('smart_user'), 'role');
+                            $sessionRoles = collect(data_get(session('smart_user'), 'roles', []))->filter()->values();
+                            $userRole = auth()->user()?->role?->value ?? auth()->user()?->role;
+                            $userRoles = collect(auth()->user()?->roles ?? [])->filter()->values();
+                            $role = $sessionRole ?: $userRole;
+                            $roles = $sessionRoles->isNotEmpty() ? $sessionRoles : $userRoles;
+
+                            $dashboardUrl = match (true) {
+                                $role === \App\Enums\UserRole::SUPER_ADMIN->value || $roles->contains(\App\Enums\UserRole::SUPER_ADMIN->value) => route('admin.dashboard'),
+                                $role === \App\Enums\UserRole::ADMIN->value || $roles->contains(\App\Enums\UserRole::ADMIN->value) => route('admin.dashboard'),
+                                $role === \App\Enums\UserRole::BENDAHARA->value || $roles->contains(\App\Enums\UserRole::BENDAHARA->value) => route('dashboard.finance'),
+                                $role === \App\Enums\UserRole::KASIR->value || $roles->contains(\App\Enums\UserRole::KASIR->value) => route('pos'),
+                                $role === \App\Enums\UserRole::WALI->value || $roles->contains(\App\Enums\UserRole::WALI->value) => route('portal.wali'),
+                                $role === \App\Enums\UserRole::SANTRI->value || $roles->contains(\App\Enums\UserRole::SANTRI->value) => route('portal.santri'),
+                                default => route('admin.dashboard'),
+                            };
+                        @endphp
+                        <a href="{{ $dashboardUrl }}" class="px-5 py-2.5 rounded-full bg-[#007A5C] text-white font-semibold shadow-lg shadow-emerald-600/20 hover:bg-[#00624a] hover:shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5">
                             Dashboard
                         </a>
                     @else

@@ -131,10 +131,6 @@ Route::middleware('session.role:admin,super_admin')->prefix('admin')->name('admi
     // Wali Management
     Route::resource('wali', WaliController::class)->except(['show']);
 
-    // Branding Settings
-    Route::get('/settings/branding', [BrandingSettingController::class, 'edit'])->name('settings.branding');
-    Route::put('/settings/branding', [BrandingSettingController::class, 'update'])->name('settings.branding.update');
-
     // Accounting Settings
     // (Moved to shared admin+bendahara group above)
 
@@ -146,6 +142,12 @@ Route::middleware('session.role:admin,super_admin')->prefix('admin')->name('admi
         Route::get('/wallet', [AdminReportController::class, 'walletReport'])->name('wallet');
     });
 
+});
+
+Route::middleware('session.role:super_admin')->prefix('admin')->name('admin.')->group(function () {
+    // Branding Settings (Super Admin only)
+    Route::get('/settings/branding', [BrandingSettingController::class, 'edit'])->name('settings.branding');
+    Route::put('/settings/branding', [BrandingSettingController::class, 'update'])->name('settings.branding.update');
 });
 
 Route::get('/payments/redirect/{payment}', PaymentRedirectController::class)->name('payments.redirect');

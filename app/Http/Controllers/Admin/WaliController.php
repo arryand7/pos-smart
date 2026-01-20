@@ -66,11 +66,19 @@ class WaliController extends Controller
 
     public function create(): View
     {
+        if (! $this->canManageSuperAdmin(request())) {
+            abort(403, 'Hanya super admin yang dapat menambah wali.');
+        }
+
         return view('admin.wali.create');
     }
 
     public function store(Request $request): RedirectResponse
     {
+        if (! $this->canManageSuperAdmin($request)) {
+            abort(403, 'Hanya super admin yang dapat menambah wali.');
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
@@ -103,12 +111,20 @@ class WaliController extends Controller
 
     public function edit(Wali $wali): View
     {
+        if (! $this->canManageSuperAdmin(request())) {
+            abort(403, 'Hanya super admin yang dapat mengubah wali.');
+        }
+
         $wali->load('santris');
         return view('admin.wali.edit', compact('wali'));
     }
 
     public function update(Request $request, Wali $wali): RedirectResponse
     {
+        if (! $this->canManageSuperAdmin($request)) {
+            abort(403, 'Hanya super admin yang dapat mengubah wali.');
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('walis', 'email')->ignore($wali->id)],
@@ -145,6 +161,10 @@ class WaliController extends Controller
 
     public function destroy(Wali $wali): RedirectResponse
     {
+        if (! $this->canManageSuperAdmin(request())) {
+            abort(403, 'Hanya super admin yang dapat menghapus wali.');
+        }
+
         // Check if wali has santris
         if ($wali->santris()->exists()) {
             return back()->with('error', 'Tidak dapat menghapus wali yang masih memiliki santri.');
@@ -159,5 +179,13 @@ class WaliController extends Controller
 
         return redirect()->route('admin.wali.index')
             ->with('status', 'Data wali berhasil dihapus.');
+    }
+
+    protected function canManageSuperAdmin(Request $request): bool
+    {
+        $user = $request->user();
+        $sessionRole = $request->session()->get('smart_user.role');
+
+        return ($user && $user->hasRole(UserRole::SUPER_ADMIN)) || $sessionRole === UserRole::SUPER_ADMIN->value;
     }
 }
