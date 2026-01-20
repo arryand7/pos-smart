@@ -354,6 +354,10 @@ class PaymentService
             $transaction = $payment->payable;
             $status = strtolower((string) $payment->status);
 
+            if ($transaction->status === 'cancelled') {
+                return;
+            }
+
             if (in_array($status, ['settlement', 'capture', 'completed', 'paid', 'success'], true)) {
                 $transaction->status = 'completed';
                 $transaction->paid_amount = $transaction->cash_amount + $transaction->wallet_amount + $transaction->gateway_amount;

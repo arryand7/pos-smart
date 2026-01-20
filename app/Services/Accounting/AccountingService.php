@@ -87,6 +87,54 @@ class AccountingService
         });
     }
 
+    public function reversePosTransaction(Transaction $transaction, ?string $reason = null): ?JournalEntry
+    {
+        $entry = JournalEntry::query()
+            ->where('source_type', Transaction::class)
+            ->where('source_id', $transaction->id)
+            ->latest('id')
+            ->first();
+
+        if (! $entry) {
+            return null;
+        }
+
+        $alreadyReversed = JournalEntry::query()
+            ->where('reference', 'REV-'.$entry->reference)
+            ->exists();
+
+        if ($alreadyReversed) {
+            return null;
+        }
+
+        $entry->loadMissing('lines.account');
+
+        return DB::transaction(function () use ($entry, $transaction, $reason) {
+            $reversal = JournalEntry::create([
+                'reference' => 'REV-'.$entry->reference,
+                'entry_date' => now()->toDateString(),
+                'status' => 'posted',
+                'description' => 'Pembatalan '.$entry->description,
+                'source_type' => Transaction::class,
+                'source_id' => $transaction->id,
+                'total_debit' => $entry->total_credit,
+                'total_credit' => $entry->total_debit,
+                'metadata' => array_filter([
+                    'reversal_of' => $entry->id,
+                    'reason' => $reason,
+                ]),
+            ]);
+
+            foreach ($entry->lines as $line) {
+                $type = $line->type === 'debit' ? 'credit' : 'debit';
+                $memo = $line->memo ? 'Reversal: '.$line->memo : 'Reversal entry';
+                $this->createLine($reversal, $line->account, $type, (float) $line->amount, $memo);
+            }
+
+            return $reversal->load('lines');
+        });
+    }
+
     protected function createLine(JournalEntry $entry, Account $account, string $type, float $amount, ?string $memo = null): JournalLine
     {
         return JournalLine::create([

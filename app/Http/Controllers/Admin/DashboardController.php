@@ -14,8 +14,8 @@ class DashboardController extends Controller
             'active_products' => Product::where('is_active', true)->count(),
             'low_stock' => Product::whereColumn('stock', '<=', 'stock_alert')->where('stock_alert', '>', 0)->count(),
             'total_santri' => \App\Models\Santri::count(),
-            'today_sales' => \App\Models\Transaction::whereDate('created_at', now())->sum('total_amount'),
-            'today_transactions' => \App\Models\Transaction::whereDate('created_at', now())->count(),
+            'today_sales' => \App\Models\Transaction::whereDate('created_at', now())->where('status', 'completed')->sum('total_amount'),
+            'today_transactions' => \App\Models\Transaction::whereDate('created_at', now())->where('status', 'completed')->count(),
         ];
 
         $lowStockProducts = Product::whereColumn('stock', '<=', 'stock_alert')

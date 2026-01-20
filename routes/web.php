@@ -108,6 +108,9 @@ Route::middleware('session.role:super_admin')->prefix('admin')->name('admin.')->
 
     // Activity Logs
     Route::get('/activity-logs', [\App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('activity-logs');
+
+    // Super admin transaction controls
+    Route::post('/reports/transactions/{transaction}/cancel', [AdminReportController::class, 'cancelTransaction'])->name('reports.transactions.cancel');
 });
 
 Route::middleware('session.role:admin,super_admin')->prefix('admin')->name('admin.')->group(function () {

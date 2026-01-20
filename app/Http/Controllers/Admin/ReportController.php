@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Support\Exports\ExportsTable;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\WalletTransaction;
+use App\Services\POS\PosService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -150,5 +152,22 @@ class ReportController extends Controller
         ];
 
         return view('admin.reports.wallet', compact('transactions', 'summary', 'startDate', 'endDate'));
+    }
+
+    public function cancelTransaction(Request $request, Transaction $transaction, PosService $posService): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user || ! $user->hasRole(\App\Enums\UserRole::SUPER_ADMIN)) {
+            abort(403, 'Hanya super admin yang bisa membatalkan transaksi.');
+        }
+
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $posService->cancelTransaction($transaction, $user, $data['reason'] ?? null);
+
+        return back()->with('status', 'Transaksi berhasil dibatalkan.');
     }
 }

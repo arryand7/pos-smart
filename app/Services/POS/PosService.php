@@ -8,6 +8,8 @@ use App\Models\Santri;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\User;
+use App\Models\WalletTransaction;
+use App\Models\ActivityLog;
 use App\Services\Accounting\AccountingService;
 use App\Services\Wallet\WalletService;
 use Illuminate\Support\Arr;
@@ -73,6 +75,9 @@ class PosService
             $transaction->total_amount = $subTotal - $transaction->discount_amount + $transaction->tax_amount;
             $transaction->paid_amount = $transaction->cash_amount + $transaction->wallet_amount;
             $transaction->change_amount = max(0, $transaction->paid_amount - $transaction->total_amount);
+            if ($transaction->gateway_amount > 0) {
+                $transaction->status = 'pending';
+            }
             $transaction->save();
 
             if ($transaction->wallet_amount > 0 && $transaction->santri) {
@@ -104,6 +109,99 @@ class PosService
         }
 
         return $results;
+    }
+
+    public function cancelTransaction(Transaction $transaction, User $actor, ?string $reason = null): Transaction
+    {
+        if ($transaction->status === 'cancelled') {
+            return $transaction;
+        }
+
+        return DB::transaction(function () use ($transaction, $actor, $reason) {
+            $transaction->loadMissing(['items', 'payments', 'santri']);
+
+            if ($transaction->wallet_amount > 0 && $transaction->santri) {
+                $alreadyRefunded = WalletTransaction::query()
+                    ->where('reference_type', Transaction::class)
+                    ->where('reference_id', $transaction->id)
+                    ->where('type', 'credit')
+                    ->exists();
+
+                if (! $alreadyRefunded) {
+                    $this->walletService->credit($transaction->santri, $transaction->wallet_amount, [
+                        'performed_by' => $actor,
+                        'channel' => 'wallet',
+                        'reference' => $transaction,
+                        'description' => 'Pembatalan transaksi '.$transaction->reference,
+                        'metadata' => ['reversal' => true],
+                    ]);
+                }
+            }
+
+            $alreadyRestocked = InventoryMovement::query()
+                ->where('reference_type', Transaction::class)
+                ->where('reference_id', $transaction->id)
+                ->where('type', 'cancel')
+                ->exists();
+
+            if (! $alreadyRestocked) {
+                foreach ($transaction->items as $item) {
+                    if (! $item->product_id) {
+                        continue;
+                    }
+
+                    $product = Product::withTrashed()->find($item->product_id);
+                    if (! $product) {
+                        continue;
+                    }
+
+                    $product->increment('stock', $item->quantity);
+
+                    InventoryMovement::create([
+                        'product_id' => $product->id,
+                        'location_id' => $transaction->location_id,
+                        'type' => 'cancel',
+                        'quantity_change' => $item->quantity,
+                        'unit_cost' => $product->cost_price,
+                        'total_cost' => $product->cost_price * $item->quantity,
+                        'reference_type' => Transaction::class,
+                        'reference_id' => $transaction->id,
+                        'description' => 'Pembatalan transaksi '.$transaction->reference,
+                        'metadata' => [
+                            'transaction_item_id' => $item->id,
+                            'reversal' => true,
+                        ],
+                        'recorded_at' => now(),
+                    ]);
+                }
+            }
+
+            foreach ($transaction->payments as $payment) {
+                if (in_array($payment->status, ['settlement', 'capture', 'completed', 'paid', 'success'], true)) {
+                    continue;
+                }
+
+                $payment->status = 'cancelled';
+                $payment->cancelled_at = now();
+                $payment->save();
+            }
+
+            $transaction->status = 'cancelled';
+            $transaction->metadata = array_merge($transaction->metadata ?? [], [
+                'cancelled_by' => $actor->id,
+                'cancelled_at' => now()->toISOString(),
+                'cancel_reason' => $reason,
+            ]);
+            $transaction->save();
+
+            $this->accountingService->reversePosTransaction($transaction, $reason);
+
+            ActivityLog::log('cancelled', 'Pembatalan transaksi '.$transaction->reference, $transaction, [
+                'reason' => $reason,
+            ]);
+
+            return $transaction;
+        });
     }
 
     protected function storeItem(Transaction $transaction, array $payload): float

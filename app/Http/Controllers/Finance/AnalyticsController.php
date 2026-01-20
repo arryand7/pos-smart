@@ -20,6 +20,7 @@ class AnalyticsController extends Controller
 
         $sales = Transaction::query()
             ->whereBetween('created_at', [$startDate->startOfDay(), $endDate->endOfDay()])
+            ->where('status', 'completed')
             ->selectRaw('DATE(created_at) as date, SUM(total_amount) as total, COUNT(*) as count')
             ->groupBy('date')
             ->orderBy('date')
@@ -115,9 +116,9 @@ class AnalyticsController extends Controller
         $today = now()->startOfDay();
         $thisMonth = now()->startOfMonth();
 
-        $todaySales = Transaction::whereDate('created_at', $today)->sum('total_amount');
-        $monthSales = Transaction::where('created_at', '>=', $thisMonth)->sum('total_amount');
-        $todayTransactions = Transaction::whereDate('created_at', $today)->count();
+        $todaySales = Transaction::whereDate('created_at', $today)->where('status', 'completed')->sum('total_amount');
+        $monthSales = Transaction::where('created_at', '>=', $thisMonth)->where('status', 'completed')->sum('total_amount');
+        $todayTransactions = Transaction::whereDate('created_at', $today)->where('status', 'completed')->count();
         $activeWallets = WalletTransaction::where('occurred_at', '>=', now()->subDays(7))
             ->distinct('santri_id')
             ->count('santri_id');

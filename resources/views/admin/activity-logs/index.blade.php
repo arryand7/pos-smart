@@ -67,6 +67,7 @@
                             'deleted' => 'badge-danger',
                             'logged_in' => 'badge-info',
                             'logged_out' => 'badge-warning',
+                            'cancelled' => 'badge-danger',
                         ];
                         $badgeClass = $actionClasses[$log->action] ?? 'badge';
                     @endphp

@@ -86,10 +86,19 @@
                         <span class="px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">{{ strtoupper($trx->status) }}</span>
                     @endif
                 </td>
-                <td>
+                <td class="space-x-2">
                     <button class="text-slate-500 hover:text-emerald-600 p-1" title="Lihat Detail">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     </button>
+                    @if(auth()->user()?->hasRole(\App\Enums\UserRole::SUPER_ADMIN) && $trx->status !== 'cancelled')
+                        <form method="POST" action="{{ route('admin.reports.transactions.cancel', $trx) }}" class="inline-block cancel-transaction-form">
+                            @csrf
+                            <input type="hidden" name="reason" value="">
+                            <button type="button" class="text-red-600 hover:text-red-700 text-xs font-semibold border border-red-200 px-2 py-1 rounded">
+                                Batalkan
+                            </button>
+                        </form>
+                    @endif
                 </td>
             </tr>
             @endforeach
@@ -115,6 +124,21 @@
                     document.querySelector("input[name='end_date']").value = end;
                 }
             }
+        });
+
+        document.querySelectorAll('.cancel-transaction-form').forEach((form) => {
+            const button = form.querySelector('button');
+            if (! button) {
+                return;
+            }
+            button.addEventListener('click', () => {
+                const reason = window.prompt('Alasan pembatalan transaksi (opsional):');
+                if (reason === null) {
+                    return;
+                }
+                form.querySelector('input[name="reason"]').value = reason.trim();
+                form.submit();
+            });
         });
     });
 </script>
