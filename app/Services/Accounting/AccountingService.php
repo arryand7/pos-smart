@@ -14,6 +14,13 @@ class AccountingService
 {
     public function recordPosTransaction(Transaction $transaction): ?JournalEntry
     {
+        if (JournalEntry::query()
+            ->where('source_type', Transaction::class)
+            ->where('source_id', $transaction->id)
+            ->exists()) {
+            return null;
+        }
+
         return DB::transaction(function () use ($transaction) {
             $cashAccount = $this->resolveAccount(config('smart.accounting.accounts.cash'), 'Kas');
             $walletAccount = $this->resolveAccount(config('smart.accounting.accounts.wallet_liability'), 'Utang Saldo Santri');

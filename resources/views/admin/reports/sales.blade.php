@@ -19,7 +19,9 @@
     <!-- Chart -->
     <div class="lg:col-span-2 admin-card">
         <h4 class="font-bold text-slate-700 mb-4">Grafik Penjualan Harian</h4>
-        <canvas id="salesChart" height="300"></canvas>
+        <div style="height:320px;">
+            <canvas id="salesChart"></canvas>
+        </div>
     </div>
 
     <!-- Summary Cards -->
@@ -99,7 +101,10 @@
 
         // Chart
         const ctx = document.getElementById('salesChart').getContext('2d');
-        new Chart(ctx, {
+        if (window.__salesChart) {
+            window.__salesChart.destroy();
+        }
+        window.__salesChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: {!! json_encode($dailySales->pluck('date')) !!},
@@ -115,6 +120,8 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: false,
+                responsiveAnimationDuration: 0,
                 plugins: {
                     legend: { display: false }
                 },

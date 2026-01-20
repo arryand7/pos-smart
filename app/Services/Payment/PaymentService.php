@@ -6,6 +6,7 @@ use App\Models\Payment;
 use App\Models\PaymentWebhookLog;
 use App\Models\Santri;
 use App\Models\Transaction;
+use App\Services\Accounting\AccountingService;
 use App\Services\Payment\Exceptions\InvalidSignatureException;
 use App\Services\Payment\Exceptions\PaymentProviderException;
 use Illuminate\Http\Request;
@@ -14,7 +15,10 @@ use Illuminate\Support\Facades\DB;
 
 class PaymentService
 {
-    public function __construct(private readonly PaymentManager $manager)
+    public function __construct(
+        private readonly PaymentManager $manager,
+        private readonly AccountingService $accountingService
+    )
     {
     }
 
@@ -88,6 +92,7 @@ class PaymentService
     {
         try {
             $payment = $this->manager->handleWebhook($providerKey, $request);
+            $this->syncPaymentPayable($payment);
 
             PaymentWebhookLog::create([
                 'provider' => $providerKey,
@@ -114,7 +119,10 @@ class PaymentService
 
     public function refreshPaymentStatus(Payment $payment): Payment
     {
-        return $this->manager->checkTransaction($payment);
+        $payment = $this->manager->checkTransaction($payment);
+        $this->syncPaymentPayable($payment);
+
+        return $payment;
     }
 
     protected function logWebhookFailure(string $providerKey, Request $request, int $status, ?string $message = null): void
@@ -334,5 +342,33 @@ class PaymentService
         }
 
         return true;
+    }
+
+    protected function syncPaymentPayable(Payment $payment): void
+    {
+        if (! $payment->payable) {
+            return;
+        }
+
+        if ($payment->payable instanceof Transaction) {
+            $transaction = $payment->payable;
+            $status = strtolower((string) $payment->status);
+
+            if (in_array($status, ['settlement', 'capture', 'completed', 'paid', 'success'], true)) {
+                $transaction->status = 'completed';
+                $transaction->paid_amount = $transaction->cash_amount + $transaction->wallet_amount + $transaction->gateway_amount;
+                $transaction->change_amount = max(0, $transaction->paid_amount - $transaction->total_amount);
+                $transaction->processed_at = $transaction->processed_at ?? now();
+                $transaction->save();
+
+                $this->accountingService->recordPosTransaction($transaction);
+                return;
+            }
+
+            if (in_array($status, ['cancelled', 'cancel', 'expired', 'expire', 'deny', 'failed'], true)) {
+                $transaction->status = 'cancelled';
+                $transaction->save();
+            }
+        }
     }
 }

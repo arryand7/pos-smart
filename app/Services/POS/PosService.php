@@ -31,15 +31,18 @@ class PosService
                 throw new \InvalidArgumentException('POS transaction requires at least one item.');
             }
 
+            $gatewayAmount = (float) Arr::get($payload, 'payments.gateway', 0);
+            $transactionStatus = $gatewayAmount > 0 ? 'pending' : Arr::get($payload, 'status', 'completed');
+
             $transaction = new Transaction([
                 'reference' => Arr::get($payload, 'reference', Str::upper(Str::random(10))),
                 'type' => Arr::get($payload, 'type', 'pos'),
                 'channel' => Arr::get($payload, 'channel', 'counter'),
                 'location_id' => Arr::get($payload, 'location_id'),
-                'status' => Arr::get($payload, 'status', 'completed'),
+                'status' => $transactionStatus,
                 'cash_amount' => Arr::get($payload, 'payments.cash', 0),
                 'wallet_amount' => Arr::get($payload, 'payments.wallet', 0),
-                'gateway_amount' => Arr::get($payload, 'payments.gateway', 0),
+                'gateway_amount' => $gatewayAmount,
                 'primary_payment_method' => Arr::get($payload, 'primary_payment_method'),
                 'payment_breakdown' => Arr::get($payload, 'payments', []),
                 'requires_sync' => Arr::get($payload, 'requires_sync', false),
@@ -68,7 +71,7 @@ class PosService
             $transaction->discount_amount = Arr::get($payload, 'discount_amount', 0);
             $transaction->tax_amount = Arr::get($payload, 'tax_amount', 0);
             $transaction->total_amount = $subTotal - $transaction->discount_amount + $transaction->tax_amount;
-            $transaction->paid_amount = $transaction->cash_amount + $transaction->wallet_amount + $transaction->gateway_amount;
+            $transaction->paid_amount = $transaction->cash_amount + $transaction->wallet_amount;
             $transaction->change_amount = max(0, $transaction->paid_amount - $transaction->total_amount);
             $transaction->save();
 
@@ -81,7 +84,9 @@ class PosService
                 ]);
             }
 
-            $this->accountingService->recordPosTransaction($transaction);
+            if ($transaction->status === 'completed') {
+                $this->accountingService->recordPosTransaction($transaction);
+            }
 
             return $transaction->fresh(['items']);
         });
