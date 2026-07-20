@@ -2,19 +2,17 @@
 
 namespace App\Http\Controllers\Portal;
 
-use App\Http\Controllers\Controller;
 use App\Enums\UserRole;
-use App\Models\PaymentProviderConfig;
+use App\Http\Controllers\Controller;
 use App\Models\Santri;
 use App\Services\Payment\PaymentService;
+use App\Support\Rupiah;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class WalletTopupController extends Controller
 {
-    public function __construct(private readonly PaymentService $paymentService)
-    {
-    }
+    public function __construct(private readonly PaymentService $paymentService) {}
 
     public function store(Request $request, Santri $santri): RedirectResponse
     {
@@ -30,10 +28,11 @@ class WalletTopupController extends Controller
         }
 
         $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:1000'],
+            'amount' => ['required', 'integer', 'min:1000'],
             'provider' => ['nullable', 'string'],
             'payment_method' => ['nullable', 'string'],
         ]);
+        $data['amount'] = Rupiah::from($data['amount'], 'top_up_amount');
 
         $provider = $data['provider'] ?? null;
         if ($provider && ! $this->providerConfigured($provider)) {
@@ -44,7 +43,7 @@ class WalletTopupController extends Controller
 
         $payment = $this->paymentService->initiateTopUp(
             $santri,
-            (float) $data['amount'],
+            $data['amount'],
             $provider,
             [
                 'channel' => 'portal',
@@ -71,38 +70,12 @@ class WalletTopupController extends Controller
 
     protected function providerConfigured(string $providerKey): bool
     {
-        $config = PaymentProviderConfig::query()
+        $config = \App\Models\PaymentProviderConfig::query()
             ->where('provider', $providerKey)
             ->where('is_active', true)
             ->first();
 
-        $baseConfig = config("smart.payments.providers.$providerKey", []);
-        $merged = array_merge($baseConfig, $config?->config ?? []);
-        $credentials = $merged['credentials'] ?? [];
-
-        if ($providerKey === 'ipaymu') {
-            $credentials['virtual_account'] = $credentials['virtual_account'] ?? ($merged['virtual_account'] ?? null);
-            $credentials['api_key'] = $credentials['api_key'] ?? ($merged['api_key'] ?? null);
-            $credentials['private_key'] = $credentials['private_key'] ?? ($merged['private_key'] ?? null);
-
-            return ! empty($credentials['virtual_account'])
-                && ! empty($credentials['api_key'])
-                && ! empty($credentials['private_key']);
-        }
-
-        if ($providerKey === 'midtrans') {
-            $credentials['server_key'] = $credentials['server_key'] ?? ($merged['server_key'] ?? null);
-
-            return ! empty($credentials['server_key']);
-        }
-
-        if ($providerKey === 'doku') {
-            $credentials['client_id'] = $credentials['client_id'] ?? ($merged['client_id'] ?? null);
-            $credentials['secret_key'] = $credentials['secret_key'] ?? ($merged['secret_key'] ?? null);
-
-            return ! empty($credentials['client_id']) && ! empty($credentials['secret_key']);
-        }
-
-        return true;
+        return app(\App\Services\Payment\PaymentManager::class)
+            ->isProviderConfigured($providerKey, $config?->config ?? []);
     }
 }

@@ -7,17 +7,18 @@ use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Support\Exports\ExportsTable;
+use App\Support\ImageOptimizer;
+use App\Support\Rupiah;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ProductController extends Controller
 {
     use ExportsTable;
-    public function __construct()
+
+    public function __construct(private readonly ImageOptimizer $imageOptimizer)
     {
         $this->authorizeResource(Product::class, 'product');
     }
@@ -109,8 +110,8 @@ class ProductController extends Controller
             'photo' => ['nullable', 'image', 'max:10240'],
             'location_id' => ['required', 'exists:locations,id'],
             'category_id' => ['nullable', 'exists:product_categories,id'],
-            'cost_price' => ['required', 'numeric', 'min:0'],
-            'sale_price' => ['required', 'numeric', 'min:0'],
+            'cost_price' => ['required', 'integer', 'min:0'],
+            'sale_price' => ['required', 'integer', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],
             'stock_alert' => ['nullable', 'integer', 'min:0'],
             'unit' => ['required', 'string', 'max:20'],
@@ -118,12 +119,26 @@ class ProductController extends Controller
             'description' => ['nullable', 'string'],
         ]);
 
-        if ($request->hasFile('photo')) {
-            $data['photo_path'] = $this->storeOptimizedPhoto($request->file('photo'));
+        $data['cost_price'] = Rupiah::from($data['cost_price'], 'cost_price');
+        $data['sale_price'] = Rupiah::from($data['sale_price'], 'sale_price');
+
+        $newPhotoPath = $request->hasFile('photo')
+            ? $this->imageOptimizer->store($request->file('photo'), 'products', 640, 640, 300 * 1024)
+            : null;
+        if ($newPhotoPath) {
+            $data['photo_path'] = $newPhotoPath;
         }
         unset($data['photo']);
 
-        Product::create($data);
+        try {
+            Product::create($data);
+        } catch (\Throwable $exception) {
+            if ($newPhotoPath) {
+                Storage::disk('public')->delete($newPhotoPath);
+            }
+
+            throw $exception;
+        }
 
         return redirect()->route('admin.products.index')->with('status', 'Produk berhasil dibuat.');
     }
@@ -146,8 +161,8 @@ class ProductController extends Controller
             'photo' => ['nullable', 'image', 'max:10240'],
             'location_id' => ['required', 'exists:locations,id'],
             'category_id' => ['nullable', 'exists:product_categories,id'],
-            'cost_price' => ['required', 'numeric', 'min:0'],
-            'sale_price' => ['required', 'numeric', 'min:0'],
+            'cost_price' => ['required', 'integer', 'min:0'],
+            'sale_price' => ['required', 'integer', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],
             'stock_alert' => ['nullable', 'integer', 'min:0'],
             'unit' => ['required', 'string', 'max:20'],
@@ -155,15 +170,31 @@ class ProductController extends Controller
             'description' => ['nullable', 'string'],
         ]);
 
-        if ($request->hasFile('photo')) {
-            if ($product->photo_path) {
-                Storage::disk('public')->delete($product->photo_path);
-            }
-            $data['photo_path'] = $this->storeOptimizedPhoto($request->file('photo'));
+        $data['cost_price'] = Rupiah::from($data['cost_price'], 'cost_price');
+        $data['sale_price'] = Rupiah::from($data['sale_price'], 'sale_price');
+
+        $oldPhotoPath = $product->photo_path;
+        $newPhotoPath = $request->hasFile('photo')
+            ? $this->imageOptimizer->store($request->file('photo'), 'products', 640, 640, 300 * 1024)
+            : null;
+        if ($newPhotoPath) {
+            $data['photo_path'] = $newPhotoPath;
         }
         unset($data['photo']);
 
-        $product->update($data);
+        try {
+            $product->update($data);
+        } catch (\Throwable $exception) {
+            if ($newPhotoPath) {
+                Storage::disk('public')->delete($newPhotoPath);
+            }
+
+            throw $exception;
+        }
+
+        if ($newPhotoPath && $oldPhotoPath && $oldPhotoPath !== $newPhotoPath) {
+            Storage::disk('public')->delete($oldPhotoPath);
+        }
 
         return redirect()->route('admin.products.index')->with('status', 'Produk berhasil diperbarui.');
     }
@@ -173,81 +204,5 @@ class ProductController extends Controller
         $product->delete();
 
         return redirect()->route('admin.products.index')->with('status', 'Produk dihapus.');
-    }
-
-    protected function storeOptimizedPhoto(UploadedFile $file): string
-    {
-        if (! function_exists('imagecreatetruecolor')) {
-            return $file->store('products', 'public');
-        }
-
-        $path = $file->getPathname();
-        $info = @getimagesize($path);
-
-        if (! $info) {
-            return $file->store('products', 'public');
-        }
-
-        [$width, $height] = $info;
-        $mime = $info['mime'] ?? null;
-
-        $source = match ($mime) {
-            'image/jpeg' => @imagecreatefromjpeg($path),
-            'image/png' => @imagecreatefrompng($path),
-            'image/webp' => @imagecreatefromwebp($path),
-            'image/gif' => @imagecreatefromgif($path),
-            default => null,
-        };
-
-        if (! $source) {
-            return $file->store('products', 'public');
-        }
-
-        $maxDim = 800;
-        $scale = min(1, $maxDim / max($width, $height));
-        $targetW = max(1, (int) round($width * $scale));
-        $targetH = max(1, (int) round($height * $scale));
-
-        $encoded = $this->encodeJpeg($source, $width, $height, $targetW, $targetH, 82);
-        $quality = 82;
-        $maxBytes = 500 * 1024;
-
-        while ($encoded && strlen($encoded) > $maxBytes && $quality > 50) {
-            $quality -= 5;
-            $encoded = $this->encodeJpeg($source, $width, $height, $targetW, $targetH, $quality);
-        }
-
-        $scaleDown = 0.9;
-        while ($encoded && strlen($encoded) > $maxBytes && $targetW > 240 && $targetH > 240) {
-            $targetW = max(1, (int) floor($targetW * $scaleDown));
-            $targetH = max(1, (int) floor($targetH * $scaleDown));
-            $encoded = $this->encodeJpeg($source, $width, $height, $targetW, $targetH, min($quality, 75));
-        }
-
-        imagedestroy($source);
-
-        if (! $encoded) {
-            return $file->store('products', 'public');
-        }
-
-        $filename = 'products/'.Str::uuid()->toString().'.jpg';
-        Storage::disk('public')->put($filename, $encoded);
-
-        return $filename;
-    }
-
-    protected function encodeJpeg($source, int $srcW, int $srcH, int $destW, int $destH, int $quality): string
-    {
-        $canvas = imagecreatetruecolor($destW, $destH);
-        $white = imagecolorallocate($canvas, 255, 255, 255);
-        imagefill($canvas, 0, 0, $white);
-        imagecopyresampled($canvas, $source, 0, 0, 0, 0, $destW, $destH, $srcW, $srcH);
-
-        ob_start();
-        imagejpeg($canvas, null, $quality);
-        $data = ob_get_clean();
-        imagedestroy($canvas);
-
-        return $data ?: '';
     }
 }

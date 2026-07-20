@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Santri;
 use App\Support\Exports\ExportsTable;
+use App\Support\ImageOptimizer;
+use App\Support\Rupiah;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class SantriController extends Controller
 {
     use ExportsTable;
-    public function __construct()
+
+    public function __construct(private readonly ImageOptimizer $imageOptimizer)
     {
         $this->authorizeResource(Santri::class, 'santri');
     }
@@ -80,14 +84,48 @@ class SantriController extends Controller
     {
         $data = $request->validate([
             'qr_code' => ['nullable', 'string', 'max:120', 'unique:santris,qr_code,'.$santri->id],
-            'daily_limit' => ['nullable', 'numeric', 'min:0'],
-            'weekly_limit' => ['nullable', 'numeric', 'min:0'],
-            'monthly_limit' => ['nullable', 'numeric', 'min:0'],
+            'photo' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
+            'daily_limit' => ['nullable', 'integer', 'min:0'],
+            'weekly_limit' => ['nullable', 'integer', 'min:0'],
+            'monthly_limit' => ['nullable', 'integer', 'min:0'],
             'is_wallet_locked' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string'],
         ]);
 
-        $santri->update($data);
+        foreach (['daily_limit', 'weekly_limit', 'monthly_limit'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $data[$field] = Rupiah::from($data[$field] ?? '0', $field);
+            }
+        }
+
+        $oldPhotoPath = $santri->photo_path;
+        $newPhotoPath = null;
+
+        if ($request->hasFile('photo')) {
+            $newPhotoPath = $this->imageOptimizer->store(
+                $request->file('photo'),
+                'santris',
+                360,
+                480,
+                200 * 1024,
+            );
+            $data['photo_path'] = $newPhotoPath;
+        }
+        unset($data['photo']);
+
+        try {
+            $santri->update($data);
+        } catch (\Throwable $exception) {
+            if ($newPhotoPath) {
+                Storage::disk('public')->delete($newPhotoPath);
+            }
+
+            throw $exception;
+        }
+
+        if ($newPhotoPath && $oldPhotoPath && $oldPhotoPath !== $newPhotoPath) {
+            Storage::disk('public')->delete($oldPhotoPath);
+        }
 
         return redirect()->route('admin.santri.index')->with('status', 'Data santri diperbarui.');
     }

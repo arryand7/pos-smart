@@ -1,5 +1,5 @@
 import { clearAuthToken, getAuthToken, withAuthToken } from '../services/authToken';
-import { enqueueTransaction, getQueue, flushQueue, removeTransaction } from '../services/offlineQueue';
+import { getQueue, removeTransaction } from '../services/offlineQueue';
 
 const USER_STORAGE_KEY = 'smart.auth.user';
 const LOCATION_CACHE_KEY = 'smart.pos.cache.locations';
@@ -53,6 +53,15 @@ function formatTime(value) {
         dateStyle: 'short',
         timeStyle: 'short',
     }).format(new Date(value));
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
 }
 
 function debounce(callback, delay = 350) {
@@ -143,6 +152,13 @@ document.addEventListener('DOMContentLoaded', () => {
         clearSantriButton: document.getElementById('clear-santri-btn'),
         printButton: document.getElementById('print-receipt-btn'),
         receiptSummary: document.getElementById('receipt-summary'),
+        historyButton: document.getElementById('transaction-history-btn'),
+        historyModal: document.getElementById('transaction-history-modal'),
+        historyBackdrop: document.getElementById('transaction-history-backdrop'),
+        historyCloseButton: document.getElementById('transaction-history-close-btn'),
+        historyState: document.getElementById('transaction-history-state'),
+        historyList: document.getElementById('transaction-history-list'),
+        historyDetail: document.getElementById('transaction-history-detail'),
         scanProductButton: document.getElementById('scan-product-btn'),
         scanSantriButton: document.getElementById('scan-santri-btn'),
         scanModal: document.getElementById('scan-modal'),
@@ -150,6 +166,23 @@ document.addEventListener('DOMContentLoaded', () => {
         scanVideo: document.getElementById('scan-video'),
         scanTitle: document.getElementById('scan-title'),
         scanHint: document.getElementById('scan-hint'),
+        successModal: document.getElementById('success-modal'),
+        successRef: document.getElementById('success-ref'),
+        successDetails: document.getElementById('success-details'),
+        successSummary: document.getElementById('success-summary'),
+        successPrintBtn: document.getElementById('success-print-btn'),
+        successNewBtn: document.getElementById('success-new-btn'),
+        successBackdrop: document.getElementById('success-backdrop'),
+        confirmModal: document.getElementById('confirm-modal'),
+        confirmBackdrop: document.getElementById('confirm-backdrop'),
+        confirmCloseBtn: document.getElementById('confirm-close-btn'),
+        confirmCancelBtn: document.getElementById('confirm-cancel-btn'),
+        confirmBuyBtn: document.getElementById('confirm-buy-btn'),
+        confirmRef: document.getElementById('confirm-ref'),
+        confirmItems: document.getElementById('confirm-items'),
+        confirmOrderSummary: document.getElementById('confirm-order-summary'),
+        confirmCustomer: document.getElementById('confirm-customer'),
+        confirmPaymentInfo: document.getElementById('confirm-payment-info'),
     };
 
     const currentUser = Object.keys(bootstrap.user || {}).length ? bootstrap.user : loadStoredUser();
@@ -174,14 +207,20 @@ document.addEventListener('DOMContentLoaded', () => {
             wallet: 0,
             gateway: 0,
         },
-        paymentMethod: 'cash',
+        paymentMethod: 'wallet',
         isSubmitting: false,
         isSyncing: false,
         offlineQueue: getQueue(),
         lastReceipt: null,
+        pendingPayload: null,
+        clientTransactionId: null,
         scanStream: null,
         scanMode: 'product',
         scanActive: false,
+        historyTransactions: [],
+        historySelectedId: null,
+        isHistoryLoading: false,
+        historyError: null,
     };
 
     function setStatus(type, text) {
@@ -375,14 +414,39 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.statusBadge.textContent = online ? 'Online' : 'Offline';
         elements.statusBadge.className = `badge ${online ? 'badge-online' : 'badge-offline'}`;
         elements.offlineCount.textContent = state.offlineQueue.length;
-        elements.syncButton.disabled = state.isSyncing || state.offlineQueue.length === 0;
+        elements.syncButton.disabled = true;
+        elements.submitButton.disabled = ! online || state.isSubmitting;
+        elements.submitButton.title = online ? '' : 'Pembayaran saldo memerlukan koneksi server.';
     }
 
     function sumOfflineItem(items = []) {
         return (items || []).reduce((sum, item) => sum + (item.unit_price || 0) * (item.quantity || 0), 0);
     }
 
+    function productRestrictionMessage(product, santri = state.santri) {
+        if (! santri || ! product.category_id) {
+            return null;
+        }
+
+        const categoryId = Number(product.category_id);
+        const blocked = (santri.blocked_category_ids || []).map(Number);
+        const allowed = (santri.whitelisted_category_ids || []).map(Number);
+
+        if (blocked.includes(categoryId) || (allowed.length > 0 && ! allowed.includes(categoryId))) {
+            return `Produk ${product.name} tidak diizinkan untuk santri yang dipilih.`;
+        }
+
+        return null;
+    }
+
     function addToCart(product) {
+        const restriction = productRestrictionMessage(product);
+        if (restriction) {
+            setStatus('error', restriction);
+            return;
+        }
+
+        state.clientTransactionId = null;
         const existing = state.cart.find((item) => item.product_id === product.id);
 
         if (existing) {
@@ -395,6 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 unit_price: Number(product.sale_price || 0),
                 barcode: product.barcode,
                 sku: product.sku,
+                category_id: product.category_id,
             });
         }
 
@@ -442,6 +507,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        state.clientTransactionId = null;
+
         if (target.dataset.action === 'plus') {
             item.quantity += 1;
         } else if (target.dataset.action === 'minus') {
@@ -465,6 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        state.clientTransactionId = null;
         state.cart[index].quantity = Math.max(1, value || 1);
         renderCart();
     }
@@ -520,11 +588,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const subTotal = cartSubtotal();
+
+        // No santri selected but wallet method active
+        if (! state.santri) {
+            elements.walletWarning.hidden = subTotal === 0;
+            elements.walletWarning.textContent = 'Pilih santri terlebih dahulu';
+            return;
+        }
+
         const balance = Number(state.santri?.wallet_balance || 0);
-        const walletAmount = Number(elements.payWallet.value || 0);
-        const insufficient = subTotal > 0 && (walletAmount < subTotal || balance < subTotal);
+        const insufficient = subTotal > 0 && balance < subTotal;
 
         elements.walletWarning.hidden = ! insufficient;
+        elements.walletWarning.textContent = 'Saldo tidak cukup';
     }
 
     function applyWalletAutoAmount() {
@@ -538,6 +614,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setPaymentMethod(method, options = {}) {
         const target = method || 'cash';
+        if (state.paymentMethod !== target) {
+            state.clientTransactionId = null;
+        }
         state.paymentMethod = target;
 
         elements.paymentMethodButtons?.forEach((button) => {
@@ -570,29 +649,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function buildPayload() {
-        const reference = `POS-${Date.now()}`;
+        state.clientTransactionId ||= window.crypto.randomUUID();
         const items = state.cart.map((item) => ({
             product_id: item.product_id,
-            product_name: item.product_name,
             quantity: item.quantity,
-            unit_price: item.unit_price,
-            discount_amount: 0,
         }));
 
         return {
-            reference,
+            client_transaction_id: state.clientTransactionId,
             location_id: state.locationId || null,
             santri_id: state.santriId || null,
-            payments: {
-                cash: Number(state.payments.cash || 0),
-                wallet: Number(state.payments.wallet || 0),
-                gateway: Number(state.payments.gateway || 0),
-            },
+            payment_method: state.paymentMethod,
+            cash_received: state.paymentMethod === 'cash' ? Number(state.payments.cash || 0) : 0,
             items,
         };
     }
 
     function resetForm() {
+        state.clientTransactionId = null;
         state.cart = [];
         elements.payCash.value = 0;
         elements.payWallet.value = 0;
@@ -601,7 +675,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.payments.wallet = 0;
         state.payments.gateway = 0;
         clearSantri();
-        setPaymentMethod('cash', { auto: false });
+        setPaymentMethod('wallet', { auto: false });
         renderCart();
     }
 
@@ -626,30 +700,233 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = new Date();
 
         return {
-            reference: transaction?.reference || payload.reference,
-            items: payload.items,
+            reference: transaction?.reference || payload.client_transaction_id,
+            items: transaction?.items ?? state.cart.map((item) => ({ ...item })),
             subtotal: transaction?.sub_total ?? subTotal,
             total: transaction?.total_amount ?? subTotal,
-            payments: payload.payments,
+            payments: {
+                cash: transaction?.cash_amount ?? 0,
+                wallet: transaction?.wallet_amount ?? 0,
+                gateway: transaction?.gateway_amount ?? 0,
+            },
             change: transaction?.change_amount ?? change,
             location: location?.name || '- -',
             kasir: currentUser?.name || 'Kasir',
             santri: state.santri,
+            walletBalanceBefore: transaction?.wallet_balance_before ?? null,
+            walletBalanceAfter: transaction?.wallet_balance_after ?? transaction?.santri?.wallet_balance ?? null,
             timestamp: transaction?.processed_at || now.toISOString(),
+            status: transaction?.status || 'completed',
             offline,
         };
     }
 
-    function printReceipt() {
-        if (! state.lastReceipt) {
+    function receiptFromTransaction(transaction) {
+        return {
+            reference: transaction.reference,
+            items: transaction.items || [],
+            subtotal: transaction.sub_total,
+            total: transaction.total_amount,
+            payments: {
+                cash: transaction.cash_amount || 0,
+                wallet: transaction.wallet_amount || 0,
+                gateway: transaction.gateway_amount || 0,
+            },
+            change: transaction.change_amount || 0,
+            location: transaction.location?.name || '-',
+            kasir: transaction.kasir?.name || '-',
+            santri: transaction.santri || null,
+            walletBalanceBefore: null,
+            walletBalanceAfter: null,
+            timestamp: transaction.processed_at || transaction.created_at,
+            status: transaction.status,
+            offline: false,
+        };
+    }
+
+    function transactionStatusLabel(status) {
+        return ({
+            completed: 'Selesai',
+            pending: 'Menunggu pembayaran',
+            cancelled: 'Dibatalkan',
+            failed: 'Gagal',
+        })[status] || status || '-';
+    }
+
+    function transactionPaymentLabel(transaction) {
+        return ({
+            cash: 'Tunai',
+            wallet: 'Saldo santri',
+            gateway: 'Gateway',
+        })[transaction.primary_payment_method] || transaction.primary_payment_method || '-';
+    }
+
+    function renderHistoryDetail(transaction) {
+        if (! elements.historyDetail) return;
+
+        if (! transaction) {
+            elements.historyDetail.hidden = true;
+            elements.historyDetail.innerHTML = '';
             return;
         }
 
-        const receipt = state.lastReceipt;
+        const itemRows = (transaction.items || []).map((item) => `
+            <tr>
+                <td>${escapeHtml(item.product_name)}</td>
+                <td>${item.quantity}</td>
+                <td>${currency(item.unit_price)}</td>
+                <td>${currency(item.subtotal || Number(item.unit_price) * item.quantity)}</td>
+            </tr>
+        `).join('');
+
+        elements.historyDetail.innerHTML = `
+            <div class="history-detail-heading">
+                <div>
+                    <strong>${escapeHtml(transaction.reference)}</strong>
+                    <span>${formatTime(transaction.processed_at || transaction.created_at)}</span>
+                </div>
+                <button type="button" class="btn secondary" data-history-action="print" data-history-id="${transaction.id}">🖨️ Cetak ulang</button>
+            </div>
+            <div class="history-detail-meta">
+                <span>Kasir: <strong>${escapeHtml(transaction.kasir?.name || '-')}</strong></span>
+                <span>Santri: <strong>${escapeHtml(transaction.santri ? `${transaction.santri.name} (${transaction.santri.nis})` : '-')}</strong></span>
+                <span>Pembayaran: <strong>${escapeHtml(transactionPaymentLabel(transaction))}</strong></span>
+                <span>Status: <strong>${escapeHtml(transactionStatusLabel(transaction.status))}</strong></span>
+            </div>
+            <div class="history-detail-table-wrap">
+                <table class="history-detail-table">
+                    <thead><tr><th>Produk</th><th>Qty</th><th>Harga</th><th>Subtotal</th></tr></thead>
+                    <tbody>${itemRows || '<tr><td colspan="4">Detail barang tidak tersedia.</td></tr>'}</tbody>
+                </table>
+            </div>
+            <div class="history-detail-total"><span>Total</span><strong>${currency(transaction.total_amount)}</strong></div>
+        `;
+        elements.historyDetail.hidden = false;
+    }
+
+    function renderTransactionHistory() {
+        if (! elements.historyList || ! elements.historyState) return;
+
+        elements.historyList.innerHTML = '';
+        elements.historyState.hidden = false;
+
+        if (state.isHistoryLoading) {
+            elements.historyState.textContent = 'Memuat riwayat transaksi…';
+            renderHistoryDetail(null);
+            return;
+        }
+
+        if (! navigator.onLine) {
+            elements.historyState.textContent = 'Riwayat transaksi memerlukan koneksi server. Keranjang tetap dapat digunakan secara offline.';
+            renderHistoryDetail(null);
+            return;
+        }
+
+        if (state.historyError) {
+            elements.historyState.textContent = state.historyError;
+            renderHistoryDetail(null);
+            return;
+        }
+
+        if (state.historyTransactions.length === 0) {
+            elements.historyState.textContent = 'Belum ada transaksi pada lokasi ini.';
+            renderHistoryDetail(null);
+            return;
+        }
+
+        elements.historyState.hidden = true;
+        state.historyTransactions.forEach((transaction) => {
+            const row = document.createElement('div');
+            row.className = 'history-row';
+            row.innerHTML = `
+                <div class="history-row-main">
+                    <strong>${escapeHtml(transaction.reference)}</strong>
+                    <span>${formatTime(transaction.processed_at || transaction.created_at)} · ${escapeHtml(transaction.santri?.name || 'Umum')}</span>
+                </div>
+                <div class="history-row-total">
+                    <strong>${currency(transaction.total_amount)}</strong>
+                    <span>${escapeHtml(transactionStatusLabel(transaction.status))}</span>
+                </div>
+                <div class="history-row-actions">
+                    <button type="button" class="history-action-link" data-history-action="view" data-history-id="${transaction.id}">Lihat</button>
+                    <button type="button" class="history-action-link" data-history-action="print" data-history-id="${transaction.id}">Cetak</button>
+                </div>
+            `;
+            elements.historyList.appendChild(row);
+        });
+
+        const selected = state.historyTransactions.find((transaction) => transaction.id === state.historySelectedId);
+        renderHistoryDetail(selected || null);
+    }
+
+    async function loadTransactionHistory() {
+        state.isHistoryLoading = true;
+        state.historyError = null;
+        renderTransactionHistory();
+
+        if (! navigator.onLine) {
+            state.isHistoryLoading = false;
+            renderTransactionHistory();
+            return;
+        }
+
+        try {
+            const params = new URLSearchParams({ per_page: '20' });
+            if (state.locationId) params.set('location_id', state.locationId);
+            const response = await axios.get(`/api/pos/transactions?${params.toString()}`);
+            state.historyTransactions = response.data?.data || [];
+            state.historySelectedId = null;
+        } catch (error) {
+            state.historyTransactions = [];
+            state.historyError = error.response?.data?.message || 'Riwayat transaksi gagal dimuat.';
+            setStatus('danger', 'Riwayat transaksi gagal dimuat. Silakan coba lagi.');
+        } finally {
+            state.isHistoryLoading = false;
+            renderTransactionHistory();
+        }
+    }
+
+    function showTransactionHistory() {
+        if (! elements.historyModal) return;
+        elements.historyModal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        elements.historyCloseButton?.focus();
+        loadTransactionHistory();
+    }
+
+    function hideTransactionHistory() {
+        if (! elements.historyModal) return;
+        elements.historyModal.hidden = true;
+        document.body.style.overflow = '';
+        elements.historyButton?.focus();
+    }
+
+    function handleHistoryAction(event) {
+        const button = event.target.closest('[data-history-action]');
+        if (! button) return;
+
+        const transaction = state.historyTransactions.find((item) => String(item.id) === button.dataset.historyId);
+        if (! transaction) return;
+
+        if (button.dataset.historyAction === 'print') {
+            printReceipt(receiptFromTransaction(transaction));
+            return;
+        }
+
+        state.historySelectedId = transaction.id;
+        renderTransactionHistory();
+        elements.historyDetail?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function printReceipt(receipt = state.lastReceipt) {
+        if (! receipt) {
+            return;
+        }
+
         const rows = receipt.items.map((item) => {
             return `
                 <tr>
-                    <td>${item.product_name}</td>
+                    <td>${escapeHtml(item.product_name)}</td>
                     <td>${item.quantity}</td>
                     <td>${currency(item.unit_price)}</td>
                     <td style="text-align:right;">${currency(item.unit_price * item.quantity)}</td>
@@ -660,7 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const html = `
             <html>
             <head>
-                <title>Struk ${receipt.reference}</title>
+                <title>Struk ${escapeHtml(receipt.reference)}</title>
                 <style>
                     body { font-family: Arial, sans-serif; padding: 16px; }
                     h1 { font-size: 18px; margin: 0 0 8px; }
@@ -673,11 +950,12 @@ document.addEventListener('DOMContentLoaded', () => {
             </head>
             <body>
                 <h1>SMART POS</h1>
-                <div class="meta">Ref: ${receipt.reference}</div>
-                <div class="meta">Lokasi: ${receipt.location}</div>
-                <div class="meta">Kasir: ${receipt.kasir}</div>
+                <div class="meta">Ref: ${escapeHtml(receipt.reference)}</div>
+                <div class="meta">Lokasi: ${escapeHtml(receipt.location)}</div>
+                <div class="meta">Kasir: ${escapeHtml(receipt.kasir)}</div>
                 <div class="meta">Waktu: ${formatTime(receipt.timestamp)}</div>
-                ${receipt.santri ? `<div class="meta">Santri: ${receipt.santri.name} (${receipt.santri.nis})</div>` : ''}
+                <div class="meta">Status: ${escapeHtml(transactionStatusLabel(receipt.status))}</div>
+                ${receipt.santri ? `<div class="meta">Santri: ${escapeHtml(receipt.santri.name)} (${escapeHtml(receipt.santri.nis)})</div>` : ''}
                 ${receipt.offline ? '<div class="meta">Mode: Offline</div>' : ''}
                 <table>
                     <thead>
@@ -725,9 +1003,87 @@ document.addEventListener('DOMContentLoaded', () => {
         printWindow.document.close();
     }
 
-    async function submitTransaction() {
+    function showSuccessModal(receipt) {
+        if (! elements.successModal) return;
+
+        // Reference
+        elements.successRef.textContent = receipt.reference + (receipt.offline ? ' (Offline)' : '');
+
+        // Items table
+        const itemRows = receipt.items.map(item =>
+            `<tr>
+                <td>${item.product_name}</td>
+                <td style="text-align:center">${item.quantity}</td>
+                <td style="text-align:right">${currency(item.unit_price)}</td>
+                <td style="text-align:right;font-weight:600">${currency(item.unit_price * item.quantity)}</td>
+            </tr>`
+        ).join('');
+
+        elements.successDetails.innerHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th style="text-align:left">Item</th>
+                        <th style="text-align:center">Qty</th>
+                        <th style="text-align:right">Harga</th>
+                        <th style="text-align:right">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>${itemRows}</tbody>
+            </table>
+        `;
+
+        // Summary
+        const summaryParts = [];
+        if (receipt.santri) {
+            summaryParts.push(`<div class="success-summary-row"><span>Santri</span><span>${receipt.santri.name} (${receipt.santri.nis})</span></div>`);
+        }
+        summaryParts.push(`<div class="success-summary-row"><span>Lokasi</span><span>${receipt.location}</span></div>`);
+        summaryParts.push(`<div class="success-summary-row"><span>Kasir</span><span>${receipt.kasir}</span></div>`);
+        summaryParts.push(`<div class="success-summary-row"><span>Waktu</span><span>${formatTime(receipt.timestamp)}</span></div>`);
+
+        if (receipt.payments.cash > 0) {
+            summaryParts.push(`<div class="success-summary-row"><span>Tunai</span><span>${currency(receipt.payments.cash)}</span></div>`);
+        }
+        if (receipt.payments.wallet > 0) {
+            summaryParts.push(`<div class="success-summary-row"><span>Saldo</span><span>${currency(receipt.payments.wallet)}</span></div>`);
+        }
+        if (receipt.walletBalanceAfter !== null) {
+            summaryParts.push(`<div class="success-summary-row"><span>Sisa saldo</span><span>${currency(receipt.walletBalanceAfter)}</span></div>`);
+        }
+        if (receipt.payments.gateway > 0) {
+            summaryParts.push(`<div class="success-summary-row"><span>Gateway</span><span>${currency(receipt.payments.gateway)}</span></div>`);
+        }
+
+        summaryParts.push(`<div class="success-summary-row total"><span>Total</span><span>${currency(receipt.total)}</span></div>`);
+
+        if (receipt.change > 0) {
+            summaryParts.push(`<div class="success-summary-row change"><span>Kembalian</span><span>${currency(receipt.change)}</span></div>`);
+        }
+
+        elements.successSummary.innerHTML = summaryParts.join('');
+
+        // Show modal
+        elements.successModal.hidden = false;
+        document.body.style.overflow = 'hidden';
+
+        // Re-trigger animations by cloning SVG
+        const ring = elements.successModal.querySelector('.success-icon-ring');
+        if (ring) {
+            const clone = ring.cloneNode(true);
+            ring.replaceWith(clone);
+        }
+    }
+
+    function hideSuccessModal() {
+        if (! elements.successModal) return;
+        elements.successModal.hidden = true;
+        document.body.style.overflow = '';
+    }
+
+    // Step 1: "Bayar Sekarang" opens confirm modal
+    function submitTransaction() {
         const payload = buildPayload();
-        const usesGateway = Number(payload.payments.gateway || 0) > 0;
 
         if (! state.locationId) {
             setStatus('error', 'Pilih lokasi terlebih dahulu.');
@@ -739,96 +1095,193 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (payload.payments.cash + payload.payments.wallet + payload.payments.gateway <= 0) {
-            setStatus('error', 'Isi minimal satu metode pembayaran.');
-            return;
-        }
-
-        if (payload.payments.wallet > 0 && ! state.santriId) {
+        if (state.paymentMethod === 'wallet' && ! state.santriId) {
             setStatus('error', 'Pilih santri sebelum menggunakan saldo.');
             return;
         }
-
-        if (state.santri && payload.payments.wallet > Number(state.santri.wallet_balance || 0)) {
+        if (! navigator.onLine) {
+            setStatus('warning', 'Pembayaran saldo memerlukan koneksi server. Katalog dan keranjang tetap tersedia.');
+            return;
+        }
+        if (state.paymentMethod === 'wallet' && state.santri && cartSubtotal() > Number(state.santri.wallet_balance || 0)) {
             setStatus('error', 'Saldo santri tidak mencukupi.');
             return;
         }
+        if (state.paymentMethod === 'cash' && Number(state.payments.cash || 0) < cartSubtotal()) {
+            setStatus('error', 'Jumlah tunai yang diterima kurang dari total transaksi.');
+            return;
+        }
+
+        // Store payload for processTransaction
+        state.pendingPayload = payload;
+        showConfirmModal(payload);
+    }
+
+    // Show confirmation modal with order review
+    function showConfirmModal(payload) {
+        if (! elements.confirmModal) return;
+
+        const location = state.locations.find(l => String(l.id) === String(state.locationId));
+        const { subTotal, change } = totals();
+
+        // Reference
+        elements.confirmRef.textContent = payload.client_transaction_id;
+
+        // Items table
+        elements.confirmItems.innerHTML = state.cart.map((item, i) =>
+            `<tr>
+                <td>${i + 1}</td>
+                <td>${item.product_name}</td>
+                <td style="text-align:center">${item.quantity}</td>
+                <td style="text-align:right">${currency(item.unit_price)}</td>
+                <td style="text-align:right">${currency(item.unit_price * item.quantity)}</td>
+            </tr>`
+        ).join('');
+
+        // Order summary
+        const summaryLines = [];
+        summaryLines.push(`<div class="confirm-summary-line"><span>Subtotal</span><span>${currency(subTotal)}</span></div>`);
+        summaryLines.push(`<div class="confirm-summary-line grand-total"><span>Total</span><span>${currency(subTotal)}</span></div>`);
+        if (change > 0) {
+            summaryLines.push(`<div class="confirm-summary-line"><span>Kembalian</span><span style="color:#d97706;font-weight:700">${currency(change)}</span></div>`);
+        }
+        elements.confirmOrderSummary.innerHTML = summaryLines.join('');
+
+        // Customer details
+        const customerRows = [];
+        if (state.santri) {
+            const initials = state.santri.name
+                .trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+            customerRows.push(`
+                <div class="confirm-student-profile">
+                    <div class="confirm-student-photo" data-confirm-student-photo>${initials}</div>
+                    <div class="confirm-student-check">
+                        <strong>Verifikasi pemilik kartu</strong>
+                        <span>Pastikan wajah pembeli sesuai dengan foto santri sebelum melanjutkan pembayaran.</span>
+                    </div>
+                </div>
+            `);
+            customerRows.push(infoRow('Nama', state.santri.name));
+            customerRows.push(infoRow('NIS', state.santri.nis));
+            customerRows.push(infoRow('Saldo', currency(state.santri.wallet_balance), 'brand'));
+        } else {
+            customerRows.push(infoRow('Pembeli', 'Guest (Umum)'));
+        }
+        customerRows.push(infoRow('Lokasi', location?.name || '—'));
+        customerRows.push(infoRow('Kasir', currentUser?.name || 'Kasir'));
+        elements.confirmCustomer.innerHTML = customerRows.join('');
+
+        const photoContainer = elements.confirmCustomer.querySelector('[data-confirm-student-photo]');
+        if (photoContainer && state.santri?.photo_url) {
+            const fallback = photoContainer.textContent;
+            const image = document.createElement('img');
+            image.src = state.santri.photo_url;
+            image.alt = `Foto ${state.santri.name}`;
+            image.addEventListener('error', () => {
+                photoContainer.textContent = fallback;
+            });
+            photoContainer.textContent = '';
+            photoContainer.appendChild(image);
+        }
+
+        // Payment info
+        const payRows = [];
+        const methodLabels = { cash: 'Tunai', wallet: 'Saldo', gateway: 'Gateway' };
+        const method = state.paymentMethod;
+        payRows.push(`<div class="confirm-info-row"><span class="info-label">Metode</span><span class="confirm-payment-badge ${method}">${methodLabels[method] || method}</span></div>`);
+
+        payRows.push(infoRow(methodLabels[method] || 'Jumlah', currency(cartSubtotal())));
+        elements.confirmPaymentInfo.innerHTML = payRows.join('');
+
+        // Show
+        elements.confirmModal.hidden = false;
+        elements.confirmBuyBtn.disabled = false;
+        elements.confirmBuyBtn.classList.remove('loading');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function infoRow(label, value, valueClass = '') {
+        return `<div class="confirm-info-row"><span class="info-label">${label}</span><span class="info-value ${valueClass}">${value}</span></div>`;
+    }
+
+    function hideConfirmModal() {
+        if (! elements.confirmModal) return;
+        elements.confirmModal.hidden = true;
+        document.body.style.overflow = '';
+        state.pendingPayload = null;
+    }
+
+    // Step 2: "Konfirmasi Beli" processes the transaction
+    async function processTransaction() {
+        const payload = state.pendingPayload;
+        if (! payload) return;
+
+        if (import.meta.env.DEV) {
+            console.debug('[SMART POS] checkout clicked');
+            console.debug('[SMART POS] checkout payload', {
+                client_transaction_id: payload.client_transaction_id,
+                santri_id: payload.santri_id,
+                location_id: payload.location_id,
+                items: payload.items,
+            });
+        }
 
         state.isSubmitting = true;
-        elements.submitButton.disabled = true;
+        elements.confirmBuyBtn.disabled = true;
+        elements.confirmBuyBtn.classList.add('loading');
 
         try {
-            if (usesGateway && (! navigator.onLine || ! getAuthToken())) {
-                setStatus('error', 'Pembayaran gateway membutuhkan koneksi internet.');
-                return;
-            }
-
             if (! navigator.onLine || ! getAuthToken()) {
-                enqueueTransaction(payload);
-                state.offlineQueue = getQueue();
-                renderOfflineQueue();
-                updateOfflineBadge();
-                setStatus('warning', 'Transaksi disimpan offline dan akan tersinkron otomatis.');
-                state.lastReceipt = buildReceipt(payload, null, true);
+                hideConfirmModal();
+                setStatus('warning', 'Pembayaran saldo memerlukan koneksi server dan tidak disimpan untuk sinkronisasi.');
+                return;
             } else {
                 const response = await axios.post('/api/pos/transactions', payload);
-                setStatus('success', 'Transaksi berhasil diproses.');
-                state.lastReceipt = buildReceipt(payload, response.data, false);
-
-                const redirectUrl = response?.data?.payment_redirect_url;
-                if (redirectUrl) {
-                    const popup = window.open(redirectUrl, '_blank', 'noopener');
-                    if (! popup) {
-                        window.location.href = redirectUrl;
-                    }
+                const transaction = response.data.data;
+                if (transaction.status === 'pending' && transaction.payment_redirect_url) {
+                    window.location.assign(transaction.payment_redirect_url);
+                    return;
                 }
+                if (state.santri && transaction.wallet_balance_after !== undefined) {
+                    state.santri.wallet_balance = transaction.wallet_balance_after;
+                    elements.santriBalance.textContent = `Saldo: ${currency(transaction.wallet_balance_after)}`;
+                }
+                state.lastReceipt = buildReceipt(payload, transaction, false);
+                await loadProducts();
             }
 
+            hideConfirmModal();
             updateReceiptSummary(state.lastReceipt);
+            showSuccessModal(state.lastReceipt);
             resetForm();
         } catch (error) {
+            hideConfirmModal();
             if (! error.response) {
-                enqueueTransaction(payload);
-                state.offlineQueue = getQueue();
-                renderOfflineQueue();
-                updateOfflineBadge();
-                setStatus('warning', 'Koneksi bermasalah. Transaksi disimpan offline.');
-                state.lastReceipt = buildReceipt(payload, null, true);
-                updateReceiptSummary(state.lastReceipt);
-                resetForm();
+                setStatus('warning', 'Koneksi bermasalah. Pembayaran tidak diproses; keranjang tetap tersimpan.');
             } else {
-                setStatus('error', error.response?.data?.message || 'Transaksi gagal diproses.');
+                const code = error.response?.data?.code;
+                const messages = {
+                    ACCOUNTING_CONFIGURATION_MISSING: 'Transaksi belum dapat diproses karena konfigurasi akun keuangan belum lengkap. Hubungi administrator.',
+                    CATEGORY_NOT_ALLOWED: error.response?.data?.message,
+                    INSUFFICIENT_WALLET_BALANCE: 'Saldo santri tidak mencukupi.',
+                    DAILY_LIMIT_EXCEEDED: 'Limit harian santri telah terlampaui.',
+                    WEEKLY_LIMIT_EXCEEDED: 'Limit mingguan santri telah terlampaui.',
+                    MONTHLY_LIMIT_EXCEEDED: 'Limit bulanan santri telah terlampaui.',
+                    INSUFFICIENT_CASH: 'Jumlah tunai yang diterima kurang dari total transaksi.',
+                    PAYMENT_GATEWAY_UNAVAILABLE: 'Payment gateway belum tersedia atau belum dikonfigurasi. Hubungi administrator.',
+                };
+                setStatus('error', messages[code] || error.response?.data?.message || 'Transaksi gagal diproses.');
             }
         } finally {
             state.isSubmitting = false;
-            elements.submitButton.disabled = false;
+            elements.submitButton.disabled = ! navigator.onLine;
+            elements.confirmBuyBtn.disabled = false;
+            elements.confirmBuyBtn.classList.remove('loading');
         }
     }
 
     async function syncOffline() {
-        const queue = getQueue();
-
-        if (queue.length === 0 || ! getAuthToken()) {
-            return;
-        }
-
-        state.isSyncing = true;
-        elements.syncButton.disabled = true;
-
-        try {
-            await flushQueue(async (transaction) => {
-                await axios.post('/api/pos/transactions', transaction);
-            });
-
-            state.offlineQueue = getQueue();
-            renderOfflineQueue();
-            setStatus('success', 'Semua transaksi offline berhasil dikirim.');
-        } catch (error) {
-            setStatus('warning', 'Sebagian transaksi gagal disinkron. Coba lagi nanti.');
-        } finally {
-            state.isSyncing = false;
-            updateOfflineBadge();
-        }
+        setStatus('warning', 'Sinkronisasi transaksi saldo offline dinonaktifkan untuk keamanan.');
     }
 
     function renderSantriResults() {
@@ -865,6 +1318,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function selectSantri(santri) {
+        state.clientTransactionId = null;
         state.santriId = santri.id;
         state.santri = santri;
         root.dataset.santriId = santri.id;
@@ -874,6 +1328,14 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.payWallet.max = santri.wallet_balance;
         elements.santriResults.hidden = true;
 
+        const removed = state.cart.filter((item) => productRestrictionMessage(item, santri));
+        if (removed.length > 0) {
+            const removedIds = new Set(removed.map((item) => item.product_id));
+            state.cart = state.cart.filter((item) => ! removedIds.has(item.product_id));
+            setStatus('error', `Produk tidak diizinkan dikeluarkan dari keranjang: ${removed.map((item) => item.product_name).join(', ')}.`);
+            renderCart();
+        }
+
         if (state.paymentMethod === 'wallet') {
             applyWalletAutoAmount();
             handlePaymentsChange();
@@ -881,6 +1343,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function clearSantri() {
+        state.clientTransactionId = null;
         state.santriId = '';
         state.santri = null;
         root.dataset.santriId = '';
@@ -995,6 +1458,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function initialize() {
+        setPaymentMethod('wallet');
         await loadLocations();
         await loadCategories();
         await loadProducts();
@@ -1133,12 +1597,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.payExactButton.addEventListener('click', setPayExact);
     elements.submitButton.addEventListener('click', submitTransaction);
+
+    // Success modal events
+    if (elements.successNewBtn) {
+        elements.successNewBtn.addEventListener('click', hideSuccessModal);
+    }
+    if (elements.successPrintBtn) {
+        elements.successPrintBtn.addEventListener('click', () => {
+            printReceipt();
+        });
+    }
+    if (elements.successBackdrop) {
+        elements.successBackdrop.addEventListener('click', hideSuccessModal);
+    }
+    // Confirm modal events
+    if (elements.confirmBuyBtn) {
+        elements.confirmBuyBtn.addEventListener('click', processTransaction);
+    }
+    if (elements.confirmCancelBtn) {
+        elements.confirmCancelBtn.addEventListener('click', hideConfirmModal);
+    }
+    if (elements.confirmCloseBtn) {
+        elements.confirmCloseBtn.addEventListener('click', hideConfirmModal);
+    }
+    if (elements.confirmBackdrop) {
+        elements.confirmBackdrop.addEventListener('click', hideConfirmModal);
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (elements.historyModal && !elements.historyModal.hidden) {
+                hideTransactionHistory();
+            } else if (elements.confirmModal && !elements.confirmModal.hidden) {
+                hideConfirmModal();
+            } else if (elements.successModal && !elements.successModal.hidden) {
+                hideSuccessModal();
+            }
+        }
+    });
     elements.syncButton.addEventListener('click', syncOffline);
     elements.logoutButton.addEventListener('click', logout);
     elements.queueList.addEventListener('click', handleQueueAction);
-    elements.printButton.addEventListener('click', printReceipt);
+    elements.printButton.addEventListener('click', () => printReceipt());
+    elements.historyButton?.addEventListener('click', showTransactionHistory);
+    elements.historyCloseButton?.addEventListener('click', hideTransactionHistory);
+    elements.historyBackdrop?.addEventListener('click', hideTransactionHistory);
+    elements.historyList?.addEventListener('click', handleHistoryAction);
+    elements.historyDetail?.addEventListener('click', handleHistoryAction);
 
     elements.locationSelect.addEventListener('change', (event) => {
+        state.clientTransactionId = null;
         state.locationId = event.target.value;
         window.localStorage.setItem('smart.pos.location', state.locationId);
         root.dataset.locationId = state.locationId;
@@ -1178,8 +1686,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.addEventListener('offline', () => {
-        setStatus('warning', 'Anda sedang offline. Transaksi akan disimpan sementara.');
+        setStatus('warning', 'Anda sedang offline. Pembayaran saldo dinonaktifkan; katalog dan keranjang tetap tersedia.');
         updateOfflineBadge();
+    });
+
+    window.addEventListener('smart:app-update', () => {
+        setStatus('warning', 'Versi baru SMART tersedia. Muat ulang aplikasi setelah menyelesaikan keranjang.');
     });
 
     window.addEventListener('smart:scan', (event) => {

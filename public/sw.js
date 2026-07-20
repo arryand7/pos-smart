@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-pos-cache-v2';
+const CACHE_NAME = 'smart-pos-cache-v3';
 const PRECACHE_URLS = ['/', '/pos'];
 
 self.addEventListener('install', (event) => {
@@ -45,17 +45,23 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    event.respondWith(
-        caches.match(request).then((cached) => {
-            const fetchPromise = fetch(request)
+    const isApplicationAsset = request.destination === 'script'
+        || request.destination === 'style'
+        || request.url.includes('/build/')
+        || request.url.includes(':5173/');
+
+    if (isApplicationAsset) {
+        event.respondWith(
+            fetch(request)
                 .then((response) => {
                     const copy = response.clone();
                     caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
                     return response;
                 })
-                .catch(() => cached);
+                .catch(() => caches.match(request))
+        );
+        return;
+    }
 
-            return cached || fetchPromise;
-        })
-    );
+    event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
 });

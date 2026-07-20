@@ -122,4 +122,27 @@ class PaymentManager
 
         return $config;
     }
+
+    /**
+     * Check whether a payment provider has valid credentials configured.
+     *
+     * Centralised here so controllers and services don't need to duplicate
+     * the per-provider credential checks.
+     */
+    public function isProviderConfigured(string $providerKey, array $dbConfig = []): bool
+    {
+        $baseConfig = config("smart.payments.providers.$providerKey", []);
+        $merged = array_merge($baseConfig, $dbConfig);
+        $credentials = $merged['credentials'] ?? [];
+
+        return match ($providerKey) {
+            'ipaymu' => ! empty($credentials['virtual_account'] ?? $merged['virtual_account'] ?? null)
+                && ! empty($credentials['api_key'] ?? $merged['api_key'] ?? null)
+                && ! empty($credentials['private_key'] ?? $merged['private_key'] ?? null),
+            'midtrans' => ! empty($credentials['server_key'] ?? $merged['server_key'] ?? null),
+            'doku' => ! empty($credentials['client_id'] ?? $merged['client_id'] ?? null)
+                && ! empty($credentials['secret_key'] ?? $merged['secret_key'] ?? null),
+            default => true,
+        };
+    }
 }

@@ -24,6 +24,18 @@
             <h2 class="stat-value text-emerald-700">Rp{{ number_format($stats['today_sales'], 0, ',', '.') }}</h2>
             <p class="stat-meta">{{ $stats['today_transactions'] }} transaksi</p>
         </div>
+        <div class="stat-card">
+            <p class="stat-label">Total Saldo Dompet</p>
+            <h2 class="stat-value text-sky-700">Rp{{ number_format($stats['total_wallet_balance'], 0, ',', '.') }}</h2>
+            <p class="stat-meta">Liabilitas saldo santri</p>
+        </div>
+        @if($stats['pending_payments'] > 0)
+        <div class="stat-card border-amber-200 bg-amber-50">
+            <p class="stat-label">Pembayaran Pending</p>
+            <h2 class="stat-value text-amber-600">{{ $stats['pending_payments'] }}</h2>
+            <p class="stat-meta">Menunggu konfirmasi gateway</p>
+        </div>
+        @endif
     </div>
 
     @if($lowStockProducts->isNotEmpty())

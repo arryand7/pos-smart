@@ -15,6 +15,7 @@ class Transaction extends Model
 
     protected $fillable = [
         'reference',
+        'client_transaction_id',
         'type',
         'channel',
         'location_id',

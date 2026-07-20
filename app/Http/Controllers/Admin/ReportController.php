@@ -3,25 +3,25 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Support\Exports\ExportsTable;
-use Illuminate\Http\Request;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\View\View;
-
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\WalletTransaction;
 use App\Services\POS\PosService;
+use App\Support\Exports\ExportsTable;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Endroid\QrCode\Builder\Builder;
-use Picqer\Barcode\BarcodeGeneratorPNG;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\View\View;
+use Picqer\Barcode\BarcodeGeneratorPNG;
 
 class ReportController extends Controller
 {
     use ExportsTable;
+
     public function index(): View
     {
         return view('admin.reports.index');
@@ -35,7 +35,7 @@ class ReportController extends Controller
         $query = Transaction::with(['location', 'kasir', 'santri'])
             ->whereBetween('created_at', [
                 Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
+                Carbon::parse($endDate)->endOfDay(),
             ]);
 
         if ($search = $request->string('search')->trim()->value()) {
@@ -152,7 +152,7 @@ class ReportController extends Controller
             ->build()
             ->getDataUri();
 
-        $barcodeGenerator = new BarcodeGeneratorPNG();
+        $barcodeGenerator = new BarcodeGeneratorPNG;
         $barcodeDataUri = 'data:image/png;base64,'.base64_encode(
             $barcodeGenerator->getBarcode($transaction->reference, $barcodeGenerator::TYPE_CODE_128)
         );
@@ -192,7 +192,7 @@ class ReportController extends Controller
             ->build()
             ->getDataUri();
 
-        $barcodeGenerator = new BarcodeGeneratorPNG();
+        $barcodeGenerator = new BarcodeGeneratorPNG;
         $barcodeDataUri = 'data:image/png;base64,'.base64_encode(
             $barcodeGenerator->getBarcode($transaction->reference, $barcodeGenerator::TYPE_CODE_128)
         );
@@ -214,14 +214,14 @@ class ReportController extends Controller
 
         // Top Products
         $topProducts = TransactionItem::select(
-                'product_name', 
-                DB::raw('SUM(quantity) as total_qty'), 
-                DB::raw('SUM(subtotal) as total_revenue')
-            )
-            ->whereHas('transaction', function($q) use ($startDate, $endDate) {
+            'product_name',
+            DB::raw('SUM(quantity) as total_qty'),
+            DB::raw('SUM(subtotal) as total_revenue')
+        )
+            ->whereHas('transaction', function ($q) use ($startDate, $endDate) {
                 $q->whereBetween('created_at', [
-                    Carbon::parse($startDate)->startOfDay(), 
-                    Carbon::parse($endDate)->endOfDay()
+                    Carbon::parse($startDate)->startOfDay(),
+                    Carbon::parse($endDate)->endOfDay(),
                 ])->where('status', 'completed');
             })
             ->groupBy('product_name')
@@ -231,14 +231,14 @@ class ReportController extends Controller
 
         // Daily Sales Chart Data
         $dailySales = Transaction::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('SUM(total_amount) as total')
-            )
+            DB::raw('DATE(created_at) as date'),
+            DB::raw('SUM(total_amount) as total')
+        )
             ->where('status', 'completed')
             ->whereBetween('created_at', [
-                Carbon::parse($startDate)->startOfDay(), 
-                Carbon::parse($endDate)->endOfDay()
-            ])
+            Carbon::parse($startDate)->startOfDay(),
+            Carbon::parse($endDate)->endOfDay(),
+        ])
             ->groupBy('date')
             ->orderBy('date')
             ->get();
@@ -251,20 +251,28 @@ class ReportController extends Controller
         $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
         $endDate = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
 
-        $transactions = WalletTransaction::with(['santri', 'performer'])
-            ->whereBetween('occurred_at', [
-                Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
-            ])
-            ->latest()
-            ->get();
-            
-        // Summary
-        $summary = [
-            'deposit' => $transactions->where('type', 'credit')->sum('amount'),
-            'usage' => $transactions->where('type', 'debit')->sum('amount'),
-            'net' => $transactions->where('type', 'credit')->sum('amount') - $transactions->where('type', 'debit')->sum('amount'),
+        $dateRange = [
+            Carbon::parse($startDate)->startOfDay(),
+            Carbon::parse($endDate)->endOfDay(),
         ];
+
+        // Summary via aggregate queries (no memory issue)
+        $depositTotal = WalletTransaction::where('type', 'credit')
+            ->whereBetween('occurred_at', $dateRange)->sum('amount');
+        $usageTotal = WalletTransaction::where('type', 'debit')
+            ->whereBetween('occurred_at', $dateRange)->sum('amount');
+
+        $summary = [
+            'deposit' => $depositTotal,
+            'usage' => $usageTotal,
+            'net' => $depositTotal - $usageTotal,
+        ];
+
+        $transactions = WalletTransaction::with(['santri', 'performer'])
+            ->whereBetween('occurred_at', $dateRange)
+            ->latest()
+            ->paginate(25)
+            ->withQueryString();
 
         return view('admin.reports.wallet', compact('transactions', 'summary', 'startDate', 'endDate'));
     }

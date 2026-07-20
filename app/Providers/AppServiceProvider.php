@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Wali;
 use App\Observers\ActivityLogObserver;
 use App\Services\Payment\PaymentManager;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -50,7 +51,7 @@ class AppServiceProvider extends ServiceProvider
         AppSetting::observe($observer);
         PaymentProviderConfig::observe($observer);
 
-        $timezone = AppSetting::getValue('timezone');
+        $timezone = Schema::hasTable('app_settings') ? AppSetting::getValue('timezone') : null;
         if ($timezone) {
             config(['app.timezone' => $timezone]);
             date_default_timezone_set($timezone);

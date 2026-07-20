@@ -11,8 +11,15 @@ class WalletTransaction extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::updating(fn () => throw new \LogicException('Wallet ledger bersifat immutable. Buat reversal entry.'));
+        static::deleting(fn () => throw new \LogicException('Wallet ledger bersifat immutable. Buat reversal entry.'));
+    }
+
     protected $fillable = [
         'santri_id',
+        'uuid',
         'performed_by',
         'type',
         'channel',
@@ -21,6 +28,8 @@ class WalletTransaction extends Model
         'balance_after',
         'reference_type',
         'reference_id',
+        'idempotency_key',
+        'reversed_transaction_id',
         'status',
         'description',
         'metadata',

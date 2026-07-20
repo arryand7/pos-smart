@@ -24,6 +24,7 @@ use App\Http\Controllers\Finance\ReportExportController;
 use App\Http\Controllers\MidtransRedirectController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\PaymentRedirectController;
+use App\Http\Controllers\SantriMediaController;
 use App\Http\Controllers\TransactionVerifyController;
 use App\Http\Controllers\Portal\GuardianCategoryController;
 use App\Http\Controllers\Portal\GuardianPaymentController;
@@ -52,6 +53,7 @@ Route::get('/verify/transaction/{token}', TransactionVerifyController::class)->n
 
 Route::get('/payments/midtrans/redirect', MidtransRedirectController::class)->name('payments.midtrans.redirect');
 Route::get('/media/products/{path}', MediaController::class)->where('path', '.*')->name('media.products');
+Route::get('/media/santris/{path}', SantriMediaController::class)->where('path', '.*')->name('media.santris');
 
 Route::middleware('session.role:bendahara,super_admin')->group(function () {
     Route::get('/dashboard/bendahara', FinanceDashboardController::class)->name('dashboard.finance');

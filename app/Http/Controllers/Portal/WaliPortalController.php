@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Portal;
 
-use App\Http\Controllers\Controller;
 use App\Enums\UserRole;
+use App\Http\Controllers\Controller;
 use App\Models\PaymentProviderConfig;
 use App\Models\ProductCategory;
 use App\Models\Wali;
@@ -117,33 +117,6 @@ class WaliPortalController extends Controller
 
     protected function providerConfigured(string $providerKey, array $dbConfig): bool
     {
-        $baseConfig = config("smart.payments.providers.$providerKey", []);
-        $merged = array_merge($baseConfig, $dbConfig);
-        $credentials = $merged['credentials'] ?? [];
-
-        if ($providerKey === 'ipaymu') {
-            $credentials['virtual_account'] = $credentials['virtual_account'] ?? ($merged['virtual_account'] ?? null);
-            $credentials['api_key'] = $credentials['api_key'] ?? ($merged['api_key'] ?? null);
-            $credentials['private_key'] = $credentials['private_key'] ?? ($merged['private_key'] ?? null);
-
-            return ! empty($credentials['virtual_account'])
-                && ! empty($credentials['api_key'])
-                && ! empty($credentials['private_key']);
-        }
-
-        if ($providerKey === 'midtrans') {
-            $credentials['server_key'] = $credentials['server_key'] ?? ($merged['server_key'] ?? null);
-
-            return ! empty($credentials['server_key']);
-        }
-
-        if ($providerKey === 'doku') {
-            $credentials['client_id'] = $credentials['client_id'] ?? ($merged['client_id'] ?? null);
-            $credentials['secret_key'] = $credentials['secret_key'] ?? ($merged['secret_key'] ?? null);
-
-            return ! empty($credentials['client_id']) && ! empty($credentials['secret_key']);
-        }
-
-        return true;
+        return app(PaymentManager::class)->isProviderConfigured($providerKey, $dbConfig);
     }
 }

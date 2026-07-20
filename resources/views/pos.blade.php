@@ -21,6 +21,9 @@
             --border: #e2e8f0;
             --danger: #ef4444;
             --warning: #f59e0b;
+            --radius-md: 0.75rem;
+            --radius-lg: 1rem;
+            --shadow-sm: 0 4px 10px -8px rgba(15, 23, 42, 0.25);
         }
         * { box-sizing: border-box; }
         body {
@@ -637,6 +640,38 @@
             padding: 0.85rem;
             font-size: 1rem;
         }
+        .receipt-actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 0.5rem;
+            align-items: center;
+            margin-top: 0.5rem;
+        }
+        .transaction-history-link {
+            border: 0;
+            background: transparent;
+            color: var(--brand);
+            padding: 0.4rem 0.25rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            cursor: pointer;
+        }
+        .transaction-history-link:hover,
+        .transaction-history-link:focus-visible {
+            color: #047857;
+        }
+        @media (max-width: 640px) {
+            .receipt-actions {
+                grid-template-columns: minmax(0, 1fr) auto;
+            }
+            .transaction-history-link {
+                grid-column: 1 / -1;
+                grid-row: 2;
+                justify-self: start;
+            }
+        }
         .payment-methods {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -829,6 +864,606 @@
             aspect-ratio: 1;
             object-fit: cover;
         }
+
+        /* ── Success Modal ── */
+        .success-modal {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 1rem;
+        }
+        .success-modal[hidden] { display: none; }
+        .success-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .success-card {
+            position: relative;
+            background: #fff;
+            border-radius: 1.5rem;
+            padding: 2rem 1.75rem 1.5rem;
+            width: 100%;
+            max-width: 420px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            text-align: center;
+            animation: successSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes successSlideUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.96); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Animated Checkmark */
+        .success-icon-ring {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 1rem;
+        }
+        .success-checkmark {
+            width: 72px;
+            height: 72px;
+        }
+        .success-circle {
+            stroke-dasharray: 166;
+            stroke-dashoffset: 166;
+            stroke-width: 2;
+            stroke-miterlimit: 10;
+            stroke: #007A5C;
+            animation: circleAnim 0.6s ease-in-out forwards;
+        }
+        @keyframes circleAnim {
+            to { stroke-dashoffset: 0; }
+        }
+        .success-check {
+            stroke-dasharray: 48;
+            stroke-dashoffset: 48;
+            stroke: #007A5C;
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            animation: checkAnim 0.35s 0.35s ease-in-out forwards;
+        }
+        @keyframes checkAnim {
+            to { stroke-dashoffset: 0; }
+        }
+
+        .success-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--text);
+            margin: 0 0 0.25rem;
+        }
+        .success-ref {
+            font-size: 0.8rem;
+            color: var(--muted);
+            font-weight: 600;
+            margin: 0 0 1rem;
+            letter-spacing: 0.04em;
+        }
+
+        /* Detail Items Table */
+        .success-details {
+            text-align: left;
+            margin-bottom: 1rem;
+        }
+        .success-details table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        .success-details th {
+            padding: 0.45rem 0.5rem;
+            background: #f8fafc;
+            color: var(--muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.7rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .success-details td {
+            padding: 0.45rem 0.5rem;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--text);
+        }
+        .success-details tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Summary Section */
+        .success-summary {
+            background: #f8fafc;
+            border-radius: 1rem;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.25rem;
+            text-align: left;
+        }
+        .success-summary-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--muted);
+            padding: 0.2rem 0;
+        }
+        .success-summary-row.total {
+            border-top: 1px dashed var(--border);
+            margin-top: 0.35rem;
+            padding-top: 0.5rem;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--text);
+        }
+        .success-summary-row.total span:last-child {
+            color: var(--brand);
+        }
+        .success-summary-row.change span:last-child {
+            color: #d97706;
+            font-weight: 700;
+        }
+
+        /* Action Buttons */
+        .success-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .success-print-btn {
+            flex: 1;
+            padding: 0.75rem 1rem !important;
+            font-weight: 700 !important;
+            border-radius: 1rem !important;
+            gap: 0.5rem;
+        }
+        .success-new-btn {
+            flex: 1.2;
+            padding: 0.75rem 1rem !important;
+            font-weight: 700 !important;
+            border-radius: 1rem !important;
+        }
+        .success-hint {
+            font-size: 0.72rem;
+            color: #94a3b8;
+            margin: 0;
+        }
+        .success-hint kbd {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.7rem;
+        }
+
+        /* ── Confirm Modal ── */
+        .confirm-modal {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 90;
+            padding: 1rem;
+        }
+
+        /* Read-only transaction history */
+        .history-modal {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 95;
+            padding: 1rem;
+        }
+        .history-modal[hidden] { display: none; }
+        .history-card {
+            position: relative;
+            width: min(760px, 100%);
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border-radius: 1.5rem;
+            background: #fff;
+            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.3);
+        }
+        .history-body {
+            overflow-y: auto;
+            padding: 1rem 1.5rem 1.5rem;
+        }
+        .history-state {
+            padding: 2rem 1rem;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+        .history-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 0.75rem;
+            align-items: center;
+            padding: 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            background: #fff;
+        }
+        .history-row-main,
+        .history-row-total {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+        .history-row-main strong { font-size: 0.84rem; color: var(--text); }
+        .history-row-main span,
+        .history-row-total span { font-size: 0.72rem; color: var(--muted); }
+        .history-row-total { text-align: right; }
+        .history-row-total strong { font-size: 0.88rem; color: var(--brand); }
+        .history-row-actions { display: flex; gap: 0.3rem; }
+        .history-action-link {
+            border: 1px solid var(--border);
+            border-radius: 0.65rem;
+            background: #fff;
+            color: #334155;
+            padding: 0.42rem 0.6rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .history-action-link:hover,
+        .history-action-link:focus-visible { border-color: var(--brand); color: var(--brand); }
+        .history-detail {
+            margin-top: 1rem;
+            padding: 1rem;
+            border: 1px solid #a7f3d0;
+            border-radius: var(--radius-lg);
+            background: #f0fdf4;
+        }
+        .history-detail-heading,
+        .history-detail-total {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+        .history-detail-heading > div { display: flex; flex-direction: column; }
+        .history-detail-heading span { color: var(--muted); font-size: 0.75rem; }
+        .history-detail-meta {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.35rem 1rem;
+            margin: 0.8rem 0;
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+        .history-detail-table-wrap { overflow-x: auto; }
+        .history-detail-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+        .history-detail-table th,
+        .history-detail-table td { padding: 0.45rem; border-bottom: 1px solid #d1fae5; text-align: left; }
+        .history-detail-table th:last-child,
+        .history-detail-table td:last-child { text-align: right; }
+        .history-detail-total { margin-top: 0.8rem; font-size: 1rem; }
+        .history-detail-total strong { color: var(--brand); font-size: 1.1rem; }
+        @media (max-width: 640px) {
+            .history-body { padding: 0.85rem; }
+            .history-row { grid-template-columns: minmax(0, 1fr) auto; }
+            .history-row-actions { grid-column: 1 / -1; }
+            .history-detail-meta { grid-template-columns: 1fr; }
+        }
+        .confirm-modal[hidden] { display: none; }
+        .confirm-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+        .confirm-card {
+            position: relative;
+            background: #fff;
+            border-radius: 1.5rem;
+            width: 100%;
+            max-width: 680px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            animation: successSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Header */
+        .confirm-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .confirm-header-left h2 {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 800;
+        }
+        .confirm-header-left p {
+            margin: 0.15rem 0 0;
+            font-size: 0.78rem;
+            color: var(--muted);
+            font-weight: 600;
+        }
+        .confirm-close-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--muted);
+            font-size: 1.1rem;
+            transition: all 0.15s;
+        }
+        .confirm-close-btn:hover {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #ef4444;
+        }
+
+        /* Body: 2-column layout */
+        .confirm-body {
+            display: grid;
+            grid-template-columns: 1.6fr 1fr;
+            gap: 0;
+        }
+        @media (max-width: 640px) {
+            .confirm-body {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Left — Order Details */
+        .confirm-order {
+            padding: 1.25rem 1.5rem;
+        }
+        .confirm-section-title {
+            font-size: 0.9rem;
+            font-weight: 800;
+            margin: 0 0 0.75rem;
+            color: var(--text);
+        }
+        .confirm-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        .confirm-table th {
+            padding: 0.5rem 0.6rem;
+            text-align: left;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.7rem;
+            border-bottom: 2px solid var(--border);
+            background: #fafbfc;
+        }
+        .confirm-table td {
+            padding: 0.6rem 0.6rem;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--text);
+        }
+        .confirm-table td:last-child {
+            font-weight: 700;
+            text-align: right;
+        }
+        .confirm-table th:last-child {
+            text-align: right;
+        }
+        .confirm-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Order summary under table */
+        .confirm-order-summary {
+            margin-top: 1rem;
+            padding-top: 0.75rem;
+            border-top: 1px dashed var(--border);
+        }
+        .confirm-summary-line {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--muted);
+            padding: 0.15rem 0;
+        }
+        .confirm-summary-line.grand-total {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: var(--text);
+            padding-top: 0.4rem;
+            margin-top: 0.25rem;
+            border-top: 2px solid var(--text);
+        }
+        .confirm-summary-line.grand-total span:last-child {
+            color: var(--brand);
+        }
+
+        /* Right — Customer + Payment Info */
+        .confirm-sidebar {
+            padding: 1.25rem 1.5rem;
+            background: #f8fafc;
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+        @media (max-width: 640px) {
+            .confirm-sidebar {
+                border-left: none;
+                border-top: 1px solid var(--border);
+            }
+        }
+        .confirm-info-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .confirm-student-profile {
+            display: grid;
+            grid-template-columns: 88px minmax(0, 1fr);
+            gap: 0.9rem;
+            align-items: center;
+            padding: 0.75rem;
+            margin-bottom: 0.85rem;
+            border: 1px solid #bfdbfe;
+            border-radius: var(--radius-lg);
+            background: #eff6ff;
+        }
+        .confirm-student-photo {
+            width: 88px;
+            height: 104px;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #dbeafe;
+            color: #1d4ed8;
+            font-size: 1.35rem;
+            font-weight: 800;
+            border: 2px solid #fff;
+            box-shadow: var(--shadow-sm);
+        }
+        .confirm-student-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .confirm-student-check strong {
+            display: block;
+            color: var(--text);
+            font-size: 0.86rem;
+            margin-bottom: 0.2rem;
+        }
+        .confirm-student-check span {
+            display: block;
+            color: var(--muted);
+            font-size: 0.75rem;
+            line-height: 1.4;
+        }
+        .confirm-info-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.82rem;
+            gap: 0.5rem;
+        }
+        .confirm-info-row .info-label {
+            color: var(--muted);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .confirm-info-row .info-value {
+            font-weight: 700;
+            color: var(--text);
+            text-align: right;
+        }
+        .confirm-info-row .info-value.brand {
+            color: var(--brand);
+        }
+
+        /* Payment method badge */
+        .confirm-payment-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.3rem 0.7rem;
+            border-radius: 999px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .confirm-payment-badge.cash { background: #dcfce7; color: #15803d; }
+        .confirm-payment-badge.wallet { background: #dbeafe; color: #1d4ed8; }
+        .confirm-payment-badge.gateway { background: #fef3c7; color: #b45309; }
+
+        /* Footer actions */
+        .confirm-footer {
+            display: flex;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border);
+            background: #fff;
+            border-radius: 0 0 1.5rem 1.5rem;
+        }
+        .confirm-cancel-btn {
+            flex: 1;
+            padding: 0.85rem 1rem;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            color: var(--text);
+            transition: all 0.15s;
+        }
+        .confirm-cancel-btn:hover {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #dc2626;
+        }
+        .confirm-buy-btn {
+            flex: 1.5;
+            padding: 0.85rem 1rem;
+            background: var(--brand);
+            color: #fff;
+            border: none;
+            border-radius: 1rem;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px -2px rgba(0, 122, 92, 0.35);
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .confirm-buy-btn:hover {
+            background: var(--brand-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px -4px rgba(0, 122, 92, 0.45);
+        }
+        .confirm-buy-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .confirm-buy-btn .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            display: none;
+        }
+        .confirm-buy-btn.loading .spinner { display: inline-block; }
+        .confirm-buy-btn.loading .btn-text { display: none; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -937,8 +1572,8 @@
                     
                     <!-- Payment Method -->
                     <div class="payment-methods">
-                        <button type="button" class="payment-method-btn active" data-method="cash">Tunai</button>
-                        <button type="button" class="payment-method-btn" data-method="wallet">Saldo</button>
+                        <button type="button" class="payment-method-btn" data-method="cash">Tunai</button>
+                        <button type="button" class="payment-method-btn active" data-method="wallet">Saldo Santri</button>
                         <button type="button" class="payment-method-btn" data-method="gateway">Gateway</button>
                     </div>
 
@@ -960,8 +1595,9 @@
                     <div class="payment-section" data-payment-section="gateway" hidden>
                         <label class="pay-field">
                             <span class="pay-label">Jumlah Gateway</span>
-                            <input id="pay-gateway" type="number" class="pay-input" value="0">
+                            <input id="pay-gateway" type="number" class="pay-input" value="0" readonly>
                         </label>
+                        <p class="hint">Pembayaran dilanjutkan melalui provider gateway yang aktif.</p>
                     </div>
 
                     <div class="summary-total">
@@ -983,8 +1619,9 @@
                     </button>
 
                     <!-- Receipt & Print -->
-                    <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
-                        <span id="receipt-summary" style="flex:1; font-size:0.8rem; color:#64748b;">Belum ada transaksi.</span>
+                    <div class="receipt-actions">
+                        <span id="receipt-summary" style="font-size:0.8rem; color:#64748b;">Belum ada transaksi.</span>
+                        <button type="button" class="transaction-history-link" id="transaction-history-btn">Lihat riwayat transaksi</button>
                         <button type="button" class="btn secondary" id="print-receipt-btn" style="font-size:0.8rem;" disabled>🖨️ Cetak</button>
                     </div>
                 </div>
@@ -995,6 +1632,118 @@
     <footer class="pos-footer">
         © 2026 Ryand Arifriantoni. All rights reserved.
     </footer>
+</div>
+
+<!-- Read-only Transaction History Modal -->
+<div class="history-modal" id="transaction-history-modal" hidden>
+    <div class="confirm-backdrop" id="transaction-history-backdrop"></div>
+    <section class="history-card" role="dialog" aria-modal="true" aria-labelledby="transaction-history-title">
+        <div class="confirm-header">
+            <div class="confirm-header-left">
+                <h2 id="transaction-history-title">Riwayat Transaksi</h2>
+                <p>20 transaksi terbaru · hanya lihat dan cetak ulang nota</p>
+            </div>
+            <button type="button" class="confirm-close-btn" id="transaction-history-close-btn" aria-label="Tutup riwayat transaksi">✕</button>
+        </div>
+        <div class="history-body">
+            <div class="history-state" id="transaction-history-state">Memuat riwayat transaksi…</div>
+            <div class="history-list" id="transaction-history-list"></div>
+            <div class="history-detail" id="transaction-history-detail" hidden></div>
+        </div>
+    </section>
+</div>
+
+<!-- Confirm Modal -->
+<div class="confirm-modal" id="confirm-modal" hidden>
+    <div class="confirm-backdrop" id="confirm-backdrop"></div>
+    <div class="confirm-card">
+        <div class="confirm-header">
+            <div class="confirm-header-left">
+                <h2>Konfirmasi Pembelian</h2>
+                <p id="confirm-ref"></p>
+            </div>
+            <button type="button" class="confirm-close-btn" id="confirm-close-btn">✕</button>
+        </div>
+
+        <div class="confirm-body">
+            <!-- Left: Order Details -->
+            <div class="confirm-order">
+                <h3 class="confirm-section-title">Detail Pesanan</h3>
+                <table class="confirm-table">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Produk</th>
+                            <th>Qty</th>
+                            <th>Harga</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="confirm-items"></tbody>
+                </table>
+
+                <div class="confirm-order-summary" id="confirm-order-summary"></div>
+            </div>
+
+            <!-- Right: Customer & Payment -->
+            <div class="confirm-sidebar">
+                <div>
+                    <h3 class="confirm-section-title">Informasi Pembeli</h3>
+                    <div class="confirm-info-grid" id="confirm-customer"></div>
+                </div>
+
+                <div>
+                    <h3 class="confirm-section-title">Metode Pembayaran</h3>
+                    <div class="confirm-info-grid" id="confirm-payment-info"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="confirm-footer">
+            <button type="button" class="confirm-cancel-btn" id="confirm-cancel-btn">
+                ✕ Batalkan
+            </button>
+            <button type="button" class="confirm-buy-btn" id="confirm-buy-btn">
+                <span class="spinner"></span>
+                <span class="btn-text">✓ Konfirmasi Beli</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div class="success-modal" id="success-modal" hidden>
+    <div class="success-backdrop" id="success-backdrop"></div>
+    <div class="success-card">
+        <div class="success-icon-ring">
+            <svg class="success-checkmark" viewBox="0 0 52 52">
+                <circle class="success-circle" cx="26" cy="26" r="25" fill="none"/>
+                <path class="success-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+            </svg>
+        </div>
+        <h2 class="success-title">Transaksi Berhasil! 🎉</h2>
+        <p class="success-ref" id="success-ref"></p>
+
+        <div class="success-details" id="success-details">
+            <!-- JS fills this -->
+        </div>
+
+        <div class="success-summary" id="success-summary">
+            <!-- JS fills this -->
+        </div>
+
+        <div class="success-actions">
+            <button type="button" class="btn success-print-btn" id="success-print-btn">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                Cetak Struk
+            </button>
+            <button type="button" class="btn primary success-new-btn" id="success-new-btn">
+                Transaksi Baru
+            </button>
+        </div>
+
+        <p class="success-hint">Tekan <kbd>Esc</kbd> atau klik "Transaksi Baru" untuk melanjutkan</p>
+    </div>
 </div>
 
 <!-- Scan Modal -->

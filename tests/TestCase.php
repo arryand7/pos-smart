@@ -12,6 +12,6 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
 
-        config(['database.default' => 'sqlite']);
+        config(['database.default' => getenv('SMART_TEST_DB_CONNECTION') ?: 'sqlite']);
     }
 }

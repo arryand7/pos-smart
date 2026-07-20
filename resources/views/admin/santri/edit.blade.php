@@ -8,10 +8,21 @@
             <h2 class="text-xl font-semibold text-slate-800">Pengaturan Santri</h2>
             <p class="text-sm text-slate-500">{{ $santri->name }} • NIS: {{ $santri->nis }}</p>
         </div>
-        <form method="POST" action="{{ route('admin.santri.update', $santri) }}" class="form-stack">
+        <form method="POST" action="{{ route('admin.santri.update', $santri) }}" class="form-stack" enctype="multipart/form-data">
             @method('PUT')
             @csrf
             <div class="form-grid">
+                <label class="form-label">Foto Santri
+                    <input id="santri-photo-input" class="form-input" type="file" name="photo" accept="image/jpeg,image/png,image/webp">
+                    <span class="form-help">Foto wajah yang jelas, maksimal 5MB. Otomatis dioptimalkan menjadi 360×480 tanpa mengubah proporsi.</span>
+                    <div id="santri-photo-preview" class="mt-3 flex h-36 w-28 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-center text-xs text-slate-500">
+                        @if($santri->photo_url)
+                            <img src="{{ $santri->photo_url }}" alt="Foto {{ $santri->name }}" class="h-full w-full object-cover">
+                        @else
+                            <span>Belum ada foto</span>
+                        @endif
+                    </div>
+                </label>
                 <label class="form-label">QR Code Santri
                     <div class="flex items-center gap-2">
                         <input id="santri-qr-input" class="form-input flex-1" type="text" name="qr_code" value="{{ old('qr_code', $santri->qr_code) }}" placeholder="Scan / masukkan QR code">
@@ -23,13 +34,14 @@
                     <input class="form-input" type="text" value="Rp{{ number_format($santri->wallet_balance, 0, ',', '.') }}" disabled>
                 </label>
                 <label class="form-label">Limit Harian
-                    <input class="form-input" type="number" name="daily_limit" min="0" value="{{ old('daily_limit', $santri->daily_limit) }}">
+                    <input class="form-input" type="number" name="daily_limit" min="0" step="1" value="{{ old('daily_limit', $santri->daily_limit) }}">
                 </label>
                 <label class="form-label">Limit Mingguan
-                    <input class="form-input" type="number" name="weekly_limit" min="0" value="{{ old('weekly_limit', $santri->weekly_limit) }}">
+                    <input class="form-input" type="number" name="weekly_limit" min="0" step="1" value="{{ old('weekly_limit', $santri->weekly_limit) }}">
                 </label>
                 <label class="form-label">Limit Bulanan
-                    <input class="form-input" type="number" name="monthly_limit" min="0" value="{{ old('monthly_limit', $santri->monthly_limit) }}">
+                    <input class="form-input" type="number" name="monthly_limit" min="0" step="1" value="{{ old('monthly_limit', $santri->monthly_limit) }}">
+                    <span class="form-help">Gunakan rupiah bulat. Nilai 0 memakai kebijakan limit default sistem.</span>
                 </label>
                 <label class="form-label">Status Dompet
                     <select class="form-select" name="is_wallet_locked">
@@ -68,6 +80,18 @@
             const closeButton = document.getElementById('santri-qr-close');
             const video = document.getElementById('santri-qr-video');
             const input = document.getElementById('santri-qr-input');
+            const photoInput = document.getElementById('santri-photo-input');
+            const photoPreview = document.getElementById('santri-photo-preview');
+
+            photoInput?.addEventListener('change', () => {
+                const file = photoInput.files?.[0];
+                if (! file || ! photoPreview) {
+                    return;
+                }
+
+                const url = URL.createObjectURL(file);
+                photoPreview.innerHTML = `<img src="${url}" alt="Preview foto santri" class="h-full w-full object-cover">`;
+            });
 
             if (!scanButton || !modal || !video || !input) {
                 return;

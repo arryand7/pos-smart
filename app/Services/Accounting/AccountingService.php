@@ -7,6 +7,7 @@ use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\Payment;
 use App\Models\Transaction;
+use App\Support\Rupiah;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -17,18 +18,24 @@ class AccountingService
         if (JournalEntry::query()
             ->where('source_type', Transaction::class)
             ->where('source_id', $transaction->id)
+            ->where('journal_type', 'primary')
             ->exists()) {
             return null;
         }
 
         return DB::transaction(function () use ($transaction) {
-            $cashAccount = $this->resolveAccount(config('smart.accounting.accounts.cash'), 'Kas');
-            $walletAccount = $this->resolveAccount(config('smart.accounting.accounts.wallet_liability'), 'Utang Saldo Santri');
-            $revenueAccount = $this->resolveAccount(config('smart.accounting.accounts.revenue'), 'Pendapatan Penjualan');
+            $cashAccount = $this->resolveAccount(config('smart.accounting.accounts.cash'));
+            $walletAccount = $this->resolveAccount(config('smart.accounting.accounts.wallet_liability'));
+            $revenueAccount = $this->resolveAccount(config('smart.accounting.accounts.revenue'));
 
             if (! $cashAccount || ! $walletAccount || ! $revenueAccount) {
                 return null;
             }
+
+            $total = Rupiah::from($transaction->total_amount, 'transaction.total_amount');
+            $walletAmount = Rupiah::from($transaction->wallet_amount, 'transaction.wallet_amount');
+            $cashAmount = Rupiah::from($transaction->cash_amount, 'transaction.cash_amount');
+            $gatewayAmount = Rupiah::from($transaction->gateway_amount, 'transaction.gateway_amount');
 
             $entry = JournalEntry::create([
                 'reference' => 'POS-'.$transaction->reference,
@@ -37,23 +44,24 @@ class AccountingService
                 'description' => 'Penjualan POS '.$transaction->reference,
                 'source_type' => Transaction::class,
                 'source_id' => $transaction->id,
-                'total_debit' => $transaction->total_amount,
-                'total_credit' => $transaction->total_amount,
+                'journal_type' => 'primary',
+                'total_debit' => $total,
+                'total_credit' => $total,
             ]);
 
-            if ($transaction->cash_amount > 0) {
-                $this->createLine($entry, $cashAccount, 'debit', $transaction->cash_amount, 'Kasir POS');
+            if ($cashAmount > 0) {
+                $this->createLine($entry, $cashAccount, 'debit', $cashAmount, 'Kasir POS');
             }
 
-            if ($transaction->gateway_amount > 0) {
-                $this->createLine($entry, $cashAccount, 'debit', $transaction->gateway_amount, 'Pembayaran Gateway');
+            if ($gatewayAmount > 0) {
+                $this->createLine($entry, $cashAccount, 'debit', $gatewayAmount, 'Pembayaran Gateway');
             }
 
-            if ($transaction->wallet_amount > 0) {
-                $this->createLine($entry, $walletAccount, 'debit', $transaction->wallet_amount, 'Penggunaan saldo santri');
+            if ($walletAmount > 0) {
+                $this->createLine($entry, $walletAccount, 'debit', $walletAmount, 'Penggunaan saldo santri');
             }
 
-            $this->createLine($entry, $revenueAccount, 'credit', $transaction->total_amount, 'Pendapatan penjualan');
+            $this->createLine($entry, $revenueAccount, 'credit', $total, 'Pendapatan penjualan');
 
             return $entry->load('lines');
         });
@@ -62,13 +70,14 @@ class AccountingService
     public function recordWalletTopUp(Payment $payment): ?JournalEntry
     {
         return DB::transaction(function () use ($payment) {
-            $cashAccount = $this->resolveAccount(config('smart.accounting.accounts.cash'), 'Kas/Bank');
-            $walletAccount = $this->resolveAccount(config('smart.accounting.accounts.wallet_liability'), 'Utang Saldo Santri');
+            $cashAccount = $this->resolveAccount(config('smart.accounting.accounts.cash'));
+            $walletAccount = $this->resolveAccount(config('smart.accounting.accounts.wallet_liability'));
 
             if (! $cashAccount || ! $walletAccount) {
                 return null;
             }
 
+            $amount = Rupiah::from($payment->amount, 'payment.amount');
             $entry = JournalEntry::create([
                 'reference' => 'TOPUP-'.($payment->provider_reference ?: Str::upper(Str::random(8))),
                 'entry_date' => now()->toDateString(),
@@ -76,12 +85,12 @@ class AccountingService
                 'description' => 'Top up saldo santri',
                 'source_type' => Payment::class,
                 'source_id' => $payment->id,
-                'total_debit' => $payment->amount,
-                'total_credit' => $payment->amount,
+                'total_debit' => $amount,
+                'total_credit' => $amount,
             ]);
 
-            $this->createLine($entry, $cashAccount, 'debit', $payment->amount, 'Dana diterima');
-            $this->createLine($entry, $walletAccount, 'credit', $payment->amount, 'Saldo dompet santri');
+            $this->createLine($entry, $cashAccount, 'debit', $amount, 'Dana diterima');
+            $this->createLine($entry, $walletAccount, 'credit', $amount, 'Saldo dompet santri');
 
             return $entry->load('lines');
         });
@@ -117,6 +126,7 @@ class AccountingService
                 'description' => 'Pembatalan '.$entry->description,
                 'source_type' => Transaction::class,
                 'source_id' => $transaction->id,
+                'journal_type' => 'reversal',
                 'total_debit' => $entry->total_credit,
                 'total_credit' => $entry->total_debit,
                 'metadata' => array_filter([
@@ -128,14 +138,14 @@ class AccountingService
             foreach ($entry->lines as $line) {
                 $type = $line->type === 'debit' ? 'credit' : 'debit';
                 $memo = $line->memo ? 'Reversal: '.$line->memo : 'Reversal entry';
-                $this->createLine($reversal, $line->account, $type, (float) $line->amount, $memo);
+                $this->createLine($reversal, $line->account, $type, Rupiah::from($line->amount, 'journal_line.amount'), $memo);
             }
 
             return $reversal->load('lines');
         });
     }
 
-    protected function createLine(JournalEntry $entry, Account $account, string $type, float $amount, ?string $memo = null): JournalLine
+    protected function createLine(JournalEntry $entry, Account $account, string $type, int $amount, ?string $memo = null): JournalLine
     {
         return JournalLine::create([
             'journal_entry_id' => $entry->id,
@@ -146,31 +156,12 @@ class AccountingService
         ]);
     }
 
-    protected function resolveAccount(?string $code, string $fallbackName): ?Account
+    protected function resolveAccount(?string $code): ?Account
     {
         if (! $code) {
             return null;
         }
 
-        return Account::firstOrCreate(
-            ['code' => $code],
-            [
-                'name' => $fallbackName,
-                'type' => $this->guessAccountType($code),
-                'is_active' => true,
-            ]
-        );
-    }
-
-    protected function guessAccountType(string $code): string
-    {
-        return match (substr($code, 0, 1)) {
-            '1' => 'asset',
-            '2' => 'liability',
-            '3' => 'equity',
-            '4' => 'revenue',
-            '5', '6' => 'expense',
-            default => 'asset',
-        };
+        return Account::query()->where('code', $code)->where('is_active', true)->first();
     }
 }

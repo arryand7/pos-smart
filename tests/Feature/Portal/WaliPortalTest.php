@@ -98,6 +98,48 @@ class WaliPortalTest extends TestCase
         ]);
     }
 
+    public function test_wali_can_set_child_limits_to_zero_without_storing_null(): void
+    {
+        $waliUser = User::factory()->create(['role' => UserRole::WALI->value]);
+        $wali = Wali::factory()->for($waliUser)->create();
+        $santri = Santri::factory()->for($wali)->create([
+            'daily_limit' => 20000,
+            'weekly_limit' => 80000,
+            'monthly_limit' => 200000,
+        ]);
+
+        $this->actingAs($waliUser)
+            ->withSession($this->sessionPayload($waliUser))
+            ->post(route('portal.wali.limits', $santri), [
+                'daily_limit' => '0',
+                'weekly_limit' => '',
+                'monthly_limit' => '0',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $santri->refresh();
+        $this->assertSame(0.0, (float) $santri->daily_limit);
+        $this->assertSame(0.0, (float) $santri->weekly_limit);
+        $this->assertSame(0.0, (float) $santri->monthly_limit);
+    }
+
+    public function test_fractional_wallet_topup_is_rejected_before_payment_creation(): void
+    {
+        $waliUser = User::factory()->create(['role' => UserRole::WALI->value]);
+        $wali = Wali::factory()->for($waliUser)->create();
+        $santri = Santri::factory()->for($wali)->create();
+
+        $this->actingAs($waliUser)
+            ->withSession($this->sessionPayload($waliUser))
+            ->post(route('portal.wali.topup', $santri), [
+                'amount' => '1000.50',
+            ])
+            ->assertSessionHasErrors('amount');
+
+        $this->assertDatabaseCount('payments', 0);
+    }
+
     public function test_wali_can_initiate_topup_and_receive_redirect_link(): void
     {
         $waliUser = User::factory()->create(['role' => UserRole::WALI->value]);

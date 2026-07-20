@@ -68,6 +68,8 @@ return [
     ],
 
     'wallet' => [
+        'offline_enabled' => filter_var(env('SMART_WALLET_OFFLINE_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'limit_timezone' => env('SMART_WALLET_LIMIT_TIMEZONE', 'Asia/Jakarta'),
         'default_daily_limit' => env('SMART_WALLET_DEFAULT_DAILY_LIMIT', 0),
         'default_weekly_limit' => env('SMART_WALLET_DEFAULT_WEEKLY_LIMIT', 200000),
         'default_monthly_limit' => env('SMART_WALLET_DEFAULT_MONTHLY_LIMIT', 0),

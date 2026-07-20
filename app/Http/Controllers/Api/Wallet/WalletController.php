@@ -8,6 +8,7 @@ use App\Models\Santri;
 use App\Models\User;
 use App\Services\Payment\PaymentService;
 use App\Services\Wallet\WalletService;
+use App\Support\Rupiah;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -17,18 +18,18 @@ class WalletController extends Controller
     public function __construct(
         private readonly WalletService $walletService,
         private readonly PaymentService $paymentService,
-    ) {
-    }
+    ) {}
 
     public function topUp(Request $request, Santri $santri): JsonResponse
     {
         $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:1'],
+            'amount' => ['required', 'integer', 'min:1'],
             'provider' => ['nullable', 'string'],
             'channel' => ['nullable', 'string', 'max:30'],
             'description' => ['nullable', 'string'],
             'metadata' => ['nullable', 'array'],
         ]);
+        $data['amount'] = Rupiah::from($data['amount'], 'top_up_amount');
 
         $provider = $data['provider'] ?? 'cash';
 

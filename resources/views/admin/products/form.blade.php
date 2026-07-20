@@ -18,7 +18,7 @@
     @endphp
     <label class="form-label">Foto Produk
         <input id="product-photo-input" class="form-input" type="file" name="photo" accept="image/*">
-        <span class="form-help">Format JPG/PNG/WebP, maksimal 2MB.</span>
+        <span class="form-help">Format JPG/PNG/WebP, maksimal 10MB. Otomatis dioptimalkan menjadi 640×640 tanpa mengubah proporsi.</span>
         <div class="product-photo">
             <div class="product-photo-preview" id="product-photo-preview">
                 @if(!empty($productPhotoUrl))

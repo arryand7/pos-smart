@@ -16,6 +16,8 @@ class DashboardController extends Controller
             'total_santri' => \App\Models\Santri::count(),
             'today_sales' => \App\Models\Transaction::whereDate('created_at', now())->where('status', 'completed')->sum('total_amount'),
             'today_transactions' => \App\Models\Transaction::whereDate('created_at', now())->where('status', 'completed')->count(),
+            'total_wallet_balance' => \App\Models\Santri::sum('wallet_balance'),
+            'pending_payments' => \App\Models\Payment::whereIn('status', ['pending', 'initiated'])->count(),
         ];
 
         $lowStockProducts = Product::whereColumn('stock', '<=', 'stock_alert')

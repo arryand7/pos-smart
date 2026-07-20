@@ -12,7 +12,7 @@ Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
 });
 
-Route::middleware(['auth:sanctum', 'role:kasir,admin,super_admin'])->prefix('pos')->group(function () {
+Route::middleware(['auth:sanctum', 'abilities:pos:manage', 'role:kasir,admin,super_admin'])->prefix('pos')->group(function () {
     Route::get('locations', [LookupController::class, 'locations']);
     Route::get('categories', [LookupController::class, 'categories']);
     Route::get('products', [LookupController::class, 'products']);

@@ -25,6 +25,7 @@ class User extends Authenticatable
         'email',
         'phone',
         'role',
+        'location_id',
         'roles',
         'preferences',
         'password',
@@ -73,6 +74,11 @@ class User extends Authenticatable
     public function cashierTransactions(): HasMany
     {
         return $this->hasMany(Transaction::class, 'kasir_id');
+    }
+
+    public function location(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Location::class);
     }
 
     public function performedWalletTransactions(): HasMany

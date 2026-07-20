@@ -116,7 +116,7 @@ class MidtransProvider implements PaymentProvider
         return $payment;
     }
 
-    public function refund(Payment $payment, float $amount, ?string $reason = null): Payment
+    public function refund(Payment $payment, int $amount, ?string $reason = null): Payment
     {
         $this->assertConfigured();
 

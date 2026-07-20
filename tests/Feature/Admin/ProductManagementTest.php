@@ -5,9 +5,10 @@ namespace Tests\Feature\Admin;
 use App\Enums\UserRole;
 use App\Models\Location;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ProductManagementTest extends TestCase
@@ -61,6 +62,50 @@ class ProductManagementTest extends TestCase
 
         $response->assertRedirect('/admin/products');
         $this->assertDatabaseHas('products', ['sku' => 'SKU123']);
+    }
+
+    public function test_fractional_product_prices_are_rejected(): void
+    {
+        $this->actingAsAdmin();
+        $location = Location::factory()->create();
+
+        $response = $this->post('/admin/products', [
+            'name' => 'Produk Pecahan',
+            'sku' => 'SKU-FRACTION',
+            'location_id' => $location->id,
+            'cost_price' => '1000.50',
+            'sale_price' => '1500.25',
+            'stock' => 10,
+            'unit' => 'pcs',
+        ]);
+
+        $response->assertSessionHasErrors(['cost_price', 'sale_price']);
+        $this->assertDatabaseMissing('products', ['sku' => 'SKU-FRACTION']);
+    }
+
+    public function test_uploaded_product_photo_is_optimized_to_fixed_square(): void
+    {
+        Storage::fake('public');
+        $this->actingAsAdmin();
+        $location = Location::factory()->create();
+
+        $this->post('/admin/products', [
+            'name' => 'Produk Foto',
+            'sku' => 'SKU-FOTO',
+            'photo' => UploadedFile::fake()->image('large-product.jpg', 1600, 900),
+            'location_id' => $location->id,
+            'cost_price' => 1000,
+            'sale_price' => 1500,
+            'stock' => 10,
+            'unit' => 'pcs',
+        ])->assertRedirect('/admin/products');
+
+        $product = Product::where('sku', 'SKU-FOTO')->firstOrFail();
+        Storage::disk('public')->assertExists($product->photo_path);
+        $optimized = getimagesize(Storage::disk('public')->path($product->photo_path));
+        $this->assertSame(640, $optimized[0]);
+        $this->assertSame(640, $optimized[1]);
+        $this->assertLessThanOrEqual(300 * 1024, Storage::disk('public')->size($product->photo_path));
     }
 
     public function test_admin_can_manage_locations(): void

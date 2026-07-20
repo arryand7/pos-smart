@@ -10,6 +10,7 @@ use App\Services\Accounting\AccountingService;
 use App\Services\Payment\Exceptions\InvalidSignatureException;
 use App\Services\Payment\Exceptions\PaymentProviderException;
 use App\Services\Payment\Exceptions\PaymentProviderHttpException;
+use App\Support\Rupiah;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -19,12 +20,11 @@ class PaymentService
     public function __construct(
         private readonly PaymentManager $manager,
         private readonly AccountingService $accountingService
-    )
-    {
-    }
+    ) {}
 
-    public function initiateTopUp(Santri $santri, float $amount, ?string $providerKey = null, array $payload = []): Payment
+    public function initiateTopUp(Santri $santri, int|string $amount, ?string $providerKey = null, array $payload = []): Payment
     {
+        $amount = Rupiah::from($amount, 'wallet top-up amount');
         $providerKey = $this->resolveProviderForCapability('wallet_topup', $providerKey);
 
         return DB::transaction(function () use ($santri, $amount, $providerKey, $payload) {
@@ -53,8 +53,9 @@ class PaymentService
         });
     }
 
-    public function initiatePosGateway(Transaction $transaction, float $amount, ?string $providerKey = null, array $payload = []): Payment
+    public function initiatePosGateway(Transaction $transaction, int|string $amount, ?string $providerKey = null, array $payload = []): Payment
     {
+        $amount = Rupiah::from($amount, 'POS gateway amount');
         $providerKey = $this->resolveProviderForCapability('pos_checkout', $providerKey);
 
         return DB::transaction(function () use ($transaction, $amount, $providerKey, $payload) {
@@ -126,9 +127,9 @@ class PaymentService
         return $payment;
     }
 
-    public function requestRefund(Payment $payment, ?float $amount = null, ?string $reason = null): Payment
+    public function requestRefund(Payment $payment, int|string|null $amount = null, ?string $reason = null): Payment
     {
-        $amount = $amount ?? (float) $payment->amount;
+        $amount = Rupiah::from($amount ?? $payment->amount, 'payment refund');
 
         if ($amount <= 0) {
             return $payment;
@@ -342,34 +343,7 @@ class PaymentService
 
     protected function providerConfigured(string $providerKey, array $dbConfig): bool
     {
-        $baseConfig = config("smart.payments.providers.$providerKey", []);
-        $merged = array_merge($baseConfig, $dbConfig);
-        $credentials = $merged['credentials'] ?? [];
-
-        if ($providerKey === 'ipaymu') {
-            $credentials['virtual_account'] = $credentials['virtual_account'] ?? ($merged['virtual_account'] ?? null);
-            $credentials['api_key'] = $credentials['api_key'] ?? ($merged['api_key'] ?? null);
-            $credentials['private_key'] = $credentials['private_key'] ?? ($merged['private_key'] ?? null);
-
-            return ! empty($credentials['virtual_account'])
-                && ! empty($credentials['api_key'])
-                && ! empty($credentials['private_key']);
-        }
-
-        if ($providerKey === 'midtrans') {
-            $credentials['server_key'] = $credentials['server_key'] ?? ($merged['server_key'] ?? null);
-
-            return ! empty($credentials['server_key']);
-        }
-
-        if ($providerKey === 'doku') {
-            $credentials['client_id'] = $credentials['client_id'] ?? ($merged['client_id'] ?? null);
-            $credentials['secret_key'] = $credentials['secret_key'] ?? ($merged['secret_key'] ?? null);
-
-            return ! empty($credentials['client_id']) && ! empty($credentials['secret_key']);
-        }
-
-        return true;
+        return $this->manager->isProviderConfigured($providerKey, $dbConfig);
     }
 
     protected function syncPaymentPayable(Payment $payment): void
@@ -394,6 +368,7 @@ class PaymentService
                 $transaction->save();
 
                 $this->accountingService->recordPosTransaction($transaction);
+
                 return;
             }
 

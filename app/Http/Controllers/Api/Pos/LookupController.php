@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Pos;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\Location;
 use App\Models\Product;
@@ -12,10 +13,15 @@ use Illuminate\Http\Request;
 
 class LookupController extends Controller
 {
-    public function locations(): JsonResponse
+    public function locations(Request $request): JsonResponse
     {
         $locations = Location::query()
             ->where('is_active', true)
+            ->when(
+                $request->user()?->hasRole(UserRole::KASIR)
+                    && ! $request->user()?->hasAnyRole(UserRole::ADMIN, UserRole::SUPER_ADMIN),
+                fn ($query) => $query->whereKey($request->user()->location_id ?? 0),
+            )
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
 
@@ -36,6 +42,11 @@ class LookupController extends Controller
         $query = Product::query()
             ->where('is_active', true)
             ->orderBy('name');
+
+        if ($request->user()?->hasRole(UserRole::KASIR)
+            && ! $request->user()?->hasAnyRole(UserRole::ADMIN, UserRole::SUPER_ADMIN)) {
+            $query->where('location_id', $request->user()->location_id ?? 0);
+        }
 
         if ($request->filled('location_id')) {
             $query->where('location_id', $request->integer('location_id'));
@@ -93,12 +104,15 @@ class LookupController extends Controller
             'id',
             'nis',
             'qr_code',
+            'photo_path',
             'name',
             'wallet_balance',
             'daily_limit',
             'weekly_limit',
             'monthly_limit',
             'is_wallet_locked',
+            'blocked_category_ids',
+            'whitelisted_category_ids',
         ]);
 
         return response()->json(['data' => $santris]);
