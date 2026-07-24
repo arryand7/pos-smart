@@ -34,13 +34,13 @@
                     <input class="form-input" type="text" value="Rp{{ number_format($santri->wallet_balance, 0, ',', '.') }}" disabled>
                 </label>
                 <label class="form-label">Limit Harian
-                    <input class="form-input" type="number" name="daily_limit" min="0" step="1" value="{{ old('daily_limit', $santri->daily_limit) }}">
+                    <input class="form-input" type="number" name="daily_limit" min="0" step="1" value="{{ old('daily_limit', (int) $santri->daily_limit) }}">
                 </label>
                 <label class="form-label">Limit Mingguan
-                    <input class="form-input" type="number" name="weekly_limit" min="0" step="1" value="{{ old('weekly_limit', $santri->weekly_limit) }}">
+                    <input class="form-input" type="number" name="weekly_limit" min="0" step="1" value="{{ old('weekly_limit', (int) $santri->weekly_limit) }}">
                 </label>
                 <label class="form-label">Limit Bulanan
-                    <input class="form-input" type="number" name="monthly_limit" min="0" step="1" value="{{ old('monthly_limit', $santri->monthly_limit) }}">
+                    <input class="form-input" type="number" name="monthly_limit" min="0" step="1" value="{{ old('monthly_limit', (int) $santri->monthly_limit) }}">
                     <span class="form-help">Gunakan rupiah bulat. Nilai 0 memakai kebijakan limit default sistem.</span>
                 </label>
                 <label class="form-label">Status Dompet

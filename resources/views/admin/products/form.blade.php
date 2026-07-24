@@ -49,10 +49,10 @@
         <input class="form-input" type="text" name="unit" value="{{ old('unit', $product->unit ?? 'pcs') }}" required>
     </label>
     <label class="form-label">Harga Modal
-        <input class="form-input" type="number" name="cost_price" min="0" step="100" value="{{ old('cost_price', $product->cost_price ?? 0) }}" required>
+        <input class="form-input" type="number" name="cost_price" min="0" step="100" value="{{ old('cost_price', (int) ($product->cost_price ?? 0)) }}" required>
     </label>
     <label class="form-label">Harga Jual
-        <input class="form-input" type="number" name="sale_price" min="0" step="100" value="{{ old('sale_price', $product->sale_price ?? 0) }}" required>
+        <input class="form-input" type="number" name="sale_price" min="0" step="100" value="{{ old('sale_price', (int) ($product->sale_price ?? 0)) }}" required>
     </label>
     <label class="form-label">Stok
         <input class="form-input" type="number" name="stock" min="0" value="{{ old('stock', $product->stock ?? 0) }}" required>

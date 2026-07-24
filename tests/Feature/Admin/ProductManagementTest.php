@@ -108,6 +108,20 @@ class ProductManagementTest extends TestCase
         $this->assertLessThanOrEqual(300 * 1024, Storage::disk('public')->size($product->photo_path));
     }
 
+    public function test_edit_form_renders_decimal_prices_as_valid_whole_rupiah_inputs(): void
+    {
+        $this->actingAsAdmin();
+        $product = Product::factory()->create([
+            'cost_price' => '1000.00',
+            'sale_price' => '1500.00',
+        ]);
+
+        $this->get(route('admin.products.edit', $product))
+            ->assertOk()
+            ->assertSee('name="cost_price" min="0" step="100" value="1000"', false)
+            ->assertSee('name="sale_price" min="0" step="100" value="1500"', false);
+    }
+
     public function test_admin_can_manage_locations(): void
     {
         $this->actingAsAdmin();

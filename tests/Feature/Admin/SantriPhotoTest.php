@@ -81,6 +81,28 @@ class SantriPhotoTest extends TestCase
         $this->assertSame(0.0, (float) $santri->monthly_limit);
     }
 
+    public function test_edit_form_renders_decimal_limits_as_valid_whole_rupiah_inputs(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::ADMIN->value]);
+        $santri = Santri::factory()->create([
+            'daily_limit' => '50000.00',
+            'weekly_limit' => '200000.00',
+            'monthly_limit' => '500000.00',
+        ]);
+
+        $this->withSession([
+            'smart_user' => [
+                'id' => $admin->id,
+                'name' => $admin->name,
+                'role' => UserRole::ADMIN->value,
+            ],
+        ])->get(route('admin.santri.edit', $santri))
+            ->assertOk()
+            ->assertSee('name="daily_limit" min="0" step="1" value="50000"', false)
+            ->assertSee('name="weekly_limit" min="0" step="1" value="200000"', false)
+            ->assertSee('name="monthly_limit" min="0" step="1" value="500000"', false);
+    }
+
     public function test_fractional_limit_is_rejected(): void
     {
         $admin = User::factory()->create(['role' => UserRole::ADMIN->value]);
