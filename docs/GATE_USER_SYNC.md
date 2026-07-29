@@ -6,7 +6,7 @@ SMART pulls identities from Gate only when a superadmin starts a preview. `GateP
 
 ## Configuration
 
-Set `GATE_URL` (HTTPS), `GATE_PROVISIONING_CLIENT_ID`, and `GATE_PROVISIONING_CLIENT_SECRET`. Optional `GATE_SYNC_PHOTO` and `GATE_SYNC_QR` default to false. Secrets remain server-side in `config/services.php`.
+Set `GATE_URL` (HTTPS), `GATE_PROVISIONING_CLIENT_ID`, and `GATE_PROVISIONING_CLIENT_SECRET`. `GATE_SYNC_ENABLED=false`, `GATE_SYNC_DRY_RUN=true`, `GATE_SYNC_PHOTO=false`, and `GATE_SYNC_QR=false` are the safe defaults. A deployment, application boot, or migration never starts synchronization. Secrets remain server-side and must not be committed.
 
 ## Database schema
 
@@ -18,7 +18,9 @@ Exactly eight categories are emitted: `matched`, `needs_update`, `missing_in_app
 
 ## Preview and apply
 
-Preview fetches Gate users and stores an expiring batch without changing users or domain data. Apply accepts item IDs and allowed actions only; category and identity payload are read from the server-side batch. A locked local transaction prevents double apply. Conflict and local-only items cannot mutate. Gate reporting starts only after commit, and a failed report becomes `report_pending`; retry never repeats local apply.
+Preview fetches Gate users and stores an expiring audit batch without changing users, tokens, photos, or domain data. Apply requires both an explicit `--apply` operation and production opt-in configuration, accepts item IDs and allowed actions only, and reads identity payloads from the server-side batch. A locked local transaction prevents double apply. Duplicate identities block the entire apply. Item-level provisioning errors are recorded while other valid items can complete, so a partial result is auditable. Gate reporting starts only after commit, and a failed report becomes `report_pending`; retry never repeats local apply.
+
+An empty successful Gate response is treated as suspicious when SMART has active users. It creates no preview and cannot suspend users. Apply also stops when configurable create, role-change, or suspension percentages exceed their limits.
 
 ## Provisioning and suspension
 
@@ -26,7 +28,7 @@ Administrative and wali accounts use minimum repository fields. Santri creation 
 
 ## Photos and QR
 
-Both capabilities are opt-in. Photos are downloaded only on checksum change over HTTPS, size/MIME/content validated, and swapped after successful storage. Signed URLs are not persisted. Gate QR values are never identity keys; duplicate values fail with `QR_CODE_CONFLICT` and are not overwritten.
+Both capabilities are opt-in. Photo URLs must use the exact `GATE_URL` hostname; credentials, localhost, private/reserved DNS answers, unsafe redirects, excess redirects, and DNS failures are rejected. DNS is pinned for the request, response bytes and time are bounded, and JPEG/PNG/WebP MIME must match the file signature. A random path under the public storage disk is used and the old photo is removed only after successful storage. Signed URLs are not persisted. Gate QR values are never identity keys; duplicate values fail with `QR_CODE_CONFLICT` and are not overwritten.
 
 ## Authorization and logs
 
@@ -34,7 +36,7 @@ All sync routes use `session.role:super_admin`; other authenticated roles receiv
 
 ## Commands and testing
 
-`php artisan smart:gate-sync-preflight` performs read-only local readiness checks. Add `--check-connection` for the only network check. Tests use `Http::fake()` and cover all categories, dry-run behavior, authorization, password isolation, idempotent apply, and pending reports.
+`php artisan gate:migration-preflight` checks migration blockers without writes or Gate access. `php artisan smart:gate-sync-preflight` checks post-migration local readiness; add `--check-connection` only when a deliberate Gate connectivity check is authorized. Use `php artisan gate:sync-users --preview --actor=<SUPERADMIN_ID>` and review the emitted batch UUID. Apply only that reviewed batch with `php artisan gate:sync-users --apply --batch=<UUID> --actor=<SUPERADMIN_ID>` after safe configuration has been explicitly enabled.
 
 ## Deployment, rollback, troubleshooting, limitations
 
