@@ -1,5 +1,13 @@
 *.log
 .DS_Store
+.codex/
+AGENTS.md
+graphify-out/
+.gradle/
+android/.gradle/
+android/build/
+**/build/reports/
+**/reports/problems/
 .env
 .env.backup
 .env.production
