@@ -40,7 +40,9 @@ class GateProvisioningClient
         }
 
         return Http::acceptJson()->withHeaders(['X-Client-Id' => $id, 'X-Client-Secret' => $secret])
-            ->connectTimeout(5)->timeout(20)->retry(2, 500, throw: false);
+            ->connectTimeout((int) config('services.gate.connect_timeout', 5))
+            ->timeout((int) config('services.gate.timeout', 20))
+            ->retry(2, 500, throw: false);
     }
 
     private function url(string $path): string

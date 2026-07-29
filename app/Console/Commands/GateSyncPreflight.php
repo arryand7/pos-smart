@@ -26,7 +26,8 @@ class GateSyncPreflight extends Command
         $this->check($checks, 'Client ID configured', filled(config('services.gate.provisioning_client_id')), true);
         $this->check($checks, 'Client secret configured', filled(config('services.gate.provisioning_client_secret')), true);
         $this->check($checks, 'Duplicate Gate UUIDs', ! $this->duplicates('users', 'gate_user_uuid'), true);
-        $this->check($checks, 'Duplicate emails', ! $this->duplicates('users', 'email'), false);
+        $this->check($checks, 'Duplicate emails', ! $this->duplicates('users', 'email'), true);
+        $this->check($checks, 'Duplicate SSO subjects', ! $this->duplicates('users', 'sso_sub'), true);
         $this->check($checks, 'Duplicate QR codes', ! $this->duplicates('santris', 'qr_code'), false);
         $this->check($checks, 'Valid local statuses', User::whereNotIn('status', ['active', 'suspended'])->doesntExist(), true);
         $roles = array_keys(config('services.gate.role_mapping', []));
@@ -36,12 +37,7 @@ class GateSyncPreflight extends Command
         $this->line('Users without Gate UUID: '.User::whereNull('gate_user_uuid')->count());
         $this->line('Pending Gate reports: '.GateSyncBatch::where('report_status', 'pending')->count());
         $this->line('Expired unapplied batches: '.GateSyncBatch::whereNull('applied_at')->where('expires_at', '<', now())->count());
-        try {
-            Storage::disk('public')->makeDirectory('gate-photos');
-            $writable = true;
-        } catch (\Throwable) {
-            $writable = false;
-        }
+        $writable = is_dir(Storage::disk('public')->path('')) && is_writable(Storage::disk('public')->path(''));
         $this->check($checks, 'Photo storage writable', $writable, false);
         if ($this->option('check-connection')) {
             try {

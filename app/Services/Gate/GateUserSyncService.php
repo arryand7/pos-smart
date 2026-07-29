@@ -20,6 +20,13 @@ class GateUserSyncService
     public function preview(User $actor): GateSyncBatch
     {
         $rawUsers = $this->client->users();
+        if ($rawUsers === [] && User::where('status', 'active')->exists()) {
+            throw new GateProvisioningException(
+                'GATE_EMPTY_ASSIGNMENT_RESPONSE',
+                'Gate mengembalikan 0 user sementara SMART memiliki user aktif. Periksa assignment aplikasi SMART di Gate.',
+                409,
+            );
+        }
         $items = $this->reconciler->reconcile($rawUsers);
 
         return DB::transaction(function () use ($actor, $rawUsers, $items) {
@@ -37,6 +44,10 @@ class GateUserSyncService
 
     public function apply(GateSyncBatch $batch, array $selections, User $actor): GateSyncBatch
     {
+        if (! config('services.gate.sync_enabled') || config('services.gate.dry_run', true)) {
+            throw ValidationException::withMessages(['batch' => 'GATE_SYNC_APPLY_DISABLED']);
+        }
+
         $result = DB::transaction(function () use ($batch, $selections, $actor) {
             $locked = GateSyncBatch::query()->whereKey($batch->id)->lockForUpdate()->firstOrFail();
             if ($locked->expires_at->isPast()) {
@@ -51,6 +62,8 @@ class GateUserSyncService
             if ($selectionMap->keys()->diff($items->pluck('id'))->isNotEmpty()) {
                 throw ValidationException::withMessages(['items' => 'Item bukan bagian dari batch ini.']);
             }
+
+            $this->assertApplyThresholds($items, $selectionMap);
 
             foreach ($items as $item) {
                 $action = $selectionMap->get($item->id, $item->recommended_action);
@@ -178,5 +191,35 @@ class GateUserSyncService
     private function fail(GateSyncItem $item, string $code): void
     {
         $item->update(['selected_action' => $item->recommended_action, 'result_status' => 'failed', 'error_code' => $code, 'error_message' => $code]);
+    }
+
+    private function assertApplyThresholds($items, $selectionMap): void
+    {
+        $criticalConflicts = ['duplicate_gate_uuid', 'multiple_local_candidates', 'multiple_gate_candidates', 'uuid_mismatch'];
+        if ($items->where('category', 'conflict')->whereIn('error_code', $criticalConflicts)->isNotEmpty()) {
+            throw ValidationException::withMessages(['batch' => 'SYNC_DUPLICATE_IDENTITY_BLOCKED']);
+        }
+
+        $selected = $items->map(fn (GateSyncItem $item) => [
+            'item' => $item,
+            'action' => $selectionMap->get($item->id, $item->recommended_action),
+        ]);
+        $localCount = max(User::count(), 1);
+        $activeCount = max(User::where('status', 'active')->count(), 1);
+        $suspendCount = $selected->where('action', 'suspend_local_user')->count();
+        $createCount = $selected->where('action', 'create_local_user')->count();
+        $roleChangeCount = $selected->filter(fn ($row) => $row['action'] === 'update_identity' && isset($row['item']->differences['role']))->count();
+
+        $guards = [
+            'SYNC_SUSPEND_THRESHOLD_EXCEEDED' => [$suspendCount, $activeCount, (float) config('services.gate.max_suspend_percent', 10)],
+            'SYNC_ROLE_THRESHOLD_EXCEEDED' => [$roleChangeCount, $localCount, (float) config('services.gate.max_role_change_percent', 10)],
+            'SYNC_CREATE_THRESHOLD_EXCEEDED' => [$createCount, $localCount, (float) config('services.gate.max_create_percent', 25)],
+        ];
+
+        foreach ($guards as $error => [$count, $denominator, $limit]) {
+            if ($count > 0 && ($count / $denominator) * 100 > $limit) {
+                throw ValidationException::withMessages(['batch' => $error]);
+            }
+        }
     }
 }
