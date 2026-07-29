@@ -22,6 +22,10 @@ class EnsureRole
             abort(401, 'Pengguna belum terautentikasi.');
         }
 
+        if ($user->status === 'suspended') {
+            abort(403, 'Akun pengguna ditangguhkan.');
+        }
+
         if ($user->hasRole(UserRole::SUPER_ADMIN)) {
             return $next($request);
         }

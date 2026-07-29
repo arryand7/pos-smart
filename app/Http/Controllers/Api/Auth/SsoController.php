@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\Auth;
 
-use App\Http\Controllers\Controller;
 use App\AppSettingManager;
 use App\Enums\UserRole;
+use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -18,7 +18,7 @@ class SsoController extends Controller
     {
         $config = $this->config();
 
-        if (!$config['client_id'] || !$config['client_secret'] || !$config['redirect_uri']) {
+        if (! $config['client_id'] || ! $config['client_secret'] || ! $config['redirect_uri']) {
             return redirect()->route('auth.login')->with('error', 'SSO belum dikonfigurasi. Silakan hubungi admin.');
         }
 
@@ -39,12 +39,12 @@ class SsoController extends Controller
 
     public function callback(Request $request)
     {
-        if (!$this->validState($request)) {
+        if (! $this->validState($request)) {
             return $this->fail();
         }
 
         $code = $request->input('code');
-        if (!$code) {
+        if (! $code) {
             return $this->fail('Kode otorisasi tidak ditemukan.');
         }
 
@@ -57,17 +57,17 @@ class SsoController extends Controller
             'code' => $code,
         ]);
 
-        if (!$tokenResponse->successful()) {
+        if (! $tokenResponse->successful()) {
             return $this->fail('Gagal menukar token SSO.');
         }
 
         $accessToken = $tokenResponse->json('access_token');
-        if (!$accessToken) {
+        if (! $accessToken) {
             return $this->fail('Access token tidak ditemukan.');
         }
 
         $userInfoResponse = Http::withToken($accessToken)->get($config['base_url'].'/oauth/userinfo');
-        if (!$userInfoResponse->successful()) {
+        if (! $userInfoResponse->successful()) {
             return $this->fail('Gagal mengambil profil SSO.');
         }
 
@@ -75,20 +75,24 @@ class SsoController extends Controller
         $sub = $claims['sub'] ?? null;
         $email = $claims['email'] ?? null;
 
-        if (!$sub) {
+        if (! $sub) {
             return $this->fail('SSO tidak mengembalikan data pengguna yang valid.');
         }
 
         $user = User::where('sso_sub', $sub)->first();
-        if (!$user && $email) {
+        if (! $user && $email) {
             $user = User::where('email', $email)->first();
         }
 
-        if (!$user) {
+        if (! $user) {
             return $this->fail('Akun Anda belum terdaftar di aplikasi ini.');
         }
 
-        if (!$user->sso_sub) {
+        if ($user->status === 'suspended') {
+            return $this->fail('Akun Anda ditangguhkan.');
+        }
+
+        if (! $user->sso_sub) {
             $user->forceFill([
                 'sso_sub' => $sub,
                 'sso_synced_at' => now(),

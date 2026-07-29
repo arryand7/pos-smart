@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    'gate' => [
+        'url' => env('GATE_URL'),
+        'provisioning_client_id' => env('GATE_PROVISIONING_CLIENT_ID'),
+        'provisioning_client_secret' => env('GATE_PROVISIONING_CLIENT_SECRET'),
+        'sync_photo' => env('GATE_SYNC_PHOTO', false),
+        'sync_qr' => env('GATE_SYNC_QR', false),
+        'preview_ttl_minutes' => env('GATE_SYNC_PREVIEW_TTL', 30),
+        'role_mapping' => [
+            'super_admin' => 'super_admin', 'admin' => 'admin', 'bendahara' => 'bendahara',
+            'kasir' => 'kasir', 'santri' => 'santri', 'wali' => 'wali',
+        ],
+    ],
+
 ];

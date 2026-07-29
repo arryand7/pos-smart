@@ -33,6 +33,13 @@ class EnsureSessionRole
             }
         }
 
+        if ($authUser?->status === 'suspended') {
+            Auth::logout();
+            $request->session()->invalidate();
+
+            return redirect()->route('auth.login')->with('error', 'Akun Anda ditangguhkan.');
+        }
+
         $role = data_get($sessionUser, 'role')
             ?? ($authUser?->role?->value ?? $authUser?->role);
 
@@ -65,8 +72,7 @@ class EnsureSessionRole
             return $next($request);
         }
 
-        return redirect($this->routeForRole($role) ?? route('auth.login'))
-            ->with('error', 'Anda tidak memiliki akses ke halaman tersebut.');
+        abort(403, 'Anda tidak memiliki akses ke halaman tersebut.');
     }
 
     protected function routeForRole(?string $role): ?string

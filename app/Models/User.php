@@ -31,6 +31,10 @@ class User extends Authenticatable
         'password',
         'sso_sub',
         'sso_synced_at',
+        'gate_user_uuid',
+        'status',
+        'last_gate_synced_at',
+        'gate_photo_checksum',
     ];
 
     /**
@@ -58,6 +62,7 @@ class User extends Authenticatable
             'roles' => 'array',
             'preferences' => 'array',
             'sso_synced_at' => 'datetime',
+            'last_gate_synced_at' => 'datetime',
         ];
     }
 

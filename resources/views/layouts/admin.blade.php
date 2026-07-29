@@ -44,7 +44,7 @@
                 </div>
             </details>
 
-            <details class="sidebar-group" @if(request()->routeIs('admin.santri.*', 'admin.wali.*', 'admin.users.*', 'admin.wallets.*')) open @endif>
+            <details class="sidebar-group" @if(request()->routeIs('admin.santri.*', 'admin.wali.*', 'admin.users.*', 'admin.wallets.*', 'admin.gate-sync.*')) open @endif>
                 <summary class="sidebar-summary">
                     <span>Pengguna</span>
                     <svg class="sidebar-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -61,6 +61,11 @@
                     <a href="{{ route('admin.users.index') }}" class="sidebar-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
                         <span>👥</span> Akun Pengguna
                     </a>
+                    @if($isSuperAdmin)
+                        <a href="{{ route('admin.gate-sync.index') }}" class="sidebar-link {{ request()->routeIs('admin.gate-sync.*') ? 'active' : '' }}">
+                            <span>↻</span> User Synchronization
+                        </a>
+                    @endif
                     <a href="{{ route('admin.wallets.index') }}" class="sidebar-link {{ request()->routeIs('admin.wallets.*') ? 'active' : '' }}">
                         <span>💳</span> Wallet Santri
                     </a>

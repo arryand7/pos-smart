@@ -1,37 +1,38 @@
 <?php
 
-use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\AccountingSettingController;
+use App\Http\Controllers\Admin\BrandingSettingController;
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\EmailSettingController;
+use App\Http\Controllers\Admin\GateUserSyncController;
 use App\Http\Controllers\Admin\LocationController;
+use App\Http\Controllers\Admin\PaymentSettingController;
 use App\Http\Controllers\Admin\ProductController;
+use App\Http\Controllers\Admin\ReportController as AdminReportController;
 use App\Http\Controllers\Admin\SantriController;
 use App\Http\Controllers\Admin\SsoSettingController;
 use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\WalletManagementController;
 use App\Http\Controllers\Admin\WaliController;
-use App\Http\Controllers\Admin\PaymentSettingController;
-use App\Http\Controllers\Admin\EmailSettingController;
-use App\Http\Controllers\Admin\BrandingSettingController;
-use App\Http\Controllers\Admin\AccountingSettingController;
-use App\Http\Controllers\Admin\ReportController as AdminReportController;
+use App\Http\Controllers\Admin\WalletManagementController;
 use App\Http\Controllers\Api\Auth\AuthBridgeController;
 use App\Http\Controllers\Api\Auth\SsoController;
 use App\Http\Controllers\CatalogController;
-use App\Http\Controllers\Finance\DashboardController as FinanceDashboardController;
 use App\Http\Controllers\Finance\AnalyticsController;
+use App\Http\Controllers\Finance\DashboardController as FinanceDashboardController;
 use App\Http\Controllers\Finance\ReportController;
 use App\Http\Controllers\Finance\ReportExportController;
-use App\Http\Controllers\MidtransRedirectController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\MidtransRedirectController;
 use App\Http\Controllers\PaymentRedirectController;
-use App\Http\Controllers\SantriMediaController;
-use App\Http\Controllers\TransactionVerifyController;
 use App\Http\Controllers\Portal\GuardianCategoryController;
 use App\Http\Controllers\Portal\GuardianPaymentController;
 use App\Http\Controllers\Portal\GuardianSantriController;
 use App\Http\Controllers\Portal\SantriPortalController;
 use App\Http\Controllers\Portal\WaliPortalController;
 use App\Http\Controllers\Portal\WalletTopupController;
+use App\Http\Controllers\SantriMediaController;
+use App\Http\Controllers\TransactionVerifyController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -60,7 +61,7 @@ Route::middleware('session.role:bendahara,super_admin')->group(function () {
     Route::get('/laporan/laba-rugi', [ReportController::class, 'profitLoss'])->name('reports.profit-loss');
     Route::get('/laporan/neraca', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
     Route::get('/laporan/arus-kas', [ReportController::class, 'cashFlow'])->name('reports.cash-flow');
-    
+
     // Export routes
     Route::get('/laporan/laba-rugi/pdf', [ReportExportController::class, 'profitLossPdf'])->name('reports.profit-loss.pdf');
     Route::get('/laporan/neraca/pdf', [ReportExportController::class, 'balanceSheetPdf'])->name('reports.balance-sheet.pdf');
@@ -95,6 +96,15 @@ Route::middleware('session.role:wali,super_admin')
 Route::middleware('session.role:santri,super_admin')->get('/portal/santri', SantriPortalController::class)->name('portal.santri');
 
 Route::middleware('session.role:super_admin')->prefix('admin')->name('admin.')->group(function () {
+    Route::prefix('gate-user-sync')->name('gate-sync.')->group(function () {
+        Route::get('/', [GateUserSyncController::class, 'index'])->name('index');
+        Route::post('/preview', [GateUserSyncController::class, 'preview'])->name('preview');
+        Route::get('/{batch}', [GateUserSyncController::class, 'show'])->name('show');
+        Route::post('/{batch}/apply', [GateUserSyncController::class, 'apply'])->name('apply');
+        Route::get('/{batch}/result', [GateUserSyncController::class, 'result'])->name('result');
+        Route::post('/{batch}/retry-report', [GateUserSyncController::class, 'retry'])->name('retry');
+        Route::get('/{batch}/conflicts.csv', [GateUserSyncController::class, 'conflicts'])->name('conflicts');
+    });
     Route::get('/settings/sso', [SsoSettingController::class, 'edit'])->name('settings.sso');
     Route::put('/settings/sso', [SsoSettingController::class, 'update'])->name('settings.sso.update');
 

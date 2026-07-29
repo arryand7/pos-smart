@@ -30,6 +30,10 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->status === 'suspended') {
+            return response()->json(['message' => 'Akun pengguna ditangguhkan.'], 403);
+        }
+
         $token = $user->createToken(
             $credentials['device_name'] ?? 'smart-api',
             $this->abilitiesForUser($user)
