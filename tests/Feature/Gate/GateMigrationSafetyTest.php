@@ -53,4 +53,20 @@ class GateMigrationSafetyTest extends TestCase
         $this->assertEquals($snapshot, DB::table('users')->where('id', $user->id)->first());
         $migration->up();
     }
+
+    public function test_identity_ownership_migration_preserves_existing_users_without_guessing_ownership(): void
+    {
+        $migration = require database_path('migrations/2026_07_30_000001_add_identity_source_to_users_table.php');
+        $user = User::factory()->create(['role' => 'wali']);
+        $password = $user->password;
+        $migration->down();
+
+        $migration->up();
+
+        $user->refresh();
+        $this->assertNull($user->identity_source);
+        $this->assertNull($user->gate_user_uuid);
+        $this->assertSame($password, $user->password);
+        $this->assertSame('wali', $user->role->value);
+    }
 }

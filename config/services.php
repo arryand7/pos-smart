@@ -43,6 +43,7 @@ return [
         'sync_photo' => env('GATE_SYNC_PHOTO', false),
         'sync_qr' => env('GATE_SYNC_QR', false),
         'dry_run' => env('GATE_SYNC_DRY_RUN', true),
+        'identity_bridge_enabled' => env('GATE_IDENTITY_BRIDGE_ENABLED', false),
         'timeout' => env('GATE_SYNC_TIMEOUT', 20),
         'connect_timeout' => env('GATE_SYNC_CONNECT_TIMEOUT', 5),
         'batch_size' => env('GATE_SYNC_BATCH_SIZE', 500),
@@ -53,6 +54,7 @@ return [
         'max_create_percent' => env('GATE_SYNC_MAX_CREATE_PERCENT', 25),
         'preview_ttl_minutes' => env('GATE_SYNC_PREVIEW_TTL', 30),
         'role_mapping' => [
+            'student' => 'santri',
             'super_admin' => 'super_admin', 'admin' => 'admin', 'bendahara' => 'bendahara',
             'kasir' => 'kasir', 'santri' => 'santri', 'wali' => 'wali',
         ],

@@ -12,7 +12,7 @@ class GateUserReconciliationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_all_eight_categories_are_deterministic_and_identifiers_never_auto_merge(): void
+    public function test_reconciliation_categories_are_deterministic_and_identifiers_never_auto_merge(): void
     {
         $uuid = fn () => (string) Str::uuid();
         $matched = User::factory()->create(['gate_user_uuid' => $uuid(), 'name' => 'Same', 'email' => 'same@example.test', 'role' => 'admin', 'status' => 'active']);
@@ -32,11 +32,11 @@ class GateUserReconciliationTest extends TestCase
             $this->gate($uuid(), 'Conflict', $conflict->email, 'admin'),
         ];
         $items = collect(app(GateUserReconciliationService::class)->reconcile($gate));
-        $this->assertEqualsCanonicalizing(['matched', 'needs_update', 'missing_in_application', 'access_revoked', 'inactive_in_gate', 'reactivation_required', 'local_only', 'conflict'], $items->pluck('category')->unique()->all());
+        $this->assertEqualsCanonicalizing(['matched', 'needs_update', 'missing_in_application', 'access_revoked', 'inactive_in_gate', 'reactivation_required', 'local_manual', 'conflict'], $items->pluck('category')->unique()->all());
         $conflictItem = $items->firstWhere('category', 'conflict');
         $this->assertSame('manual_review', $conflictItem['recommended_action']);
         $this->assertNull($conflict->fresh()->gate_user_uuid);
-        $this->assertSame($localOnly->id, $items->firstWhere('category', 'local_only')['local_user_id']);
+        $this->assertSame($localOnly->id, $items->firstWhere('category', 'local_manual')['local_user_id']);
     }
 
     private function gate(string $uuid, string $name, string $email, string $role, bool $identity = true, bool $access = true): array

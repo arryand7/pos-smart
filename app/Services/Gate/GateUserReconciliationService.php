@@ -13,6 +13,7 @@ class GateUserReconciliationService
         'missing_in_application' => ['create_local_user', 'skip'],
         'access_revoked' => ['suspend_local_user'], 'inactive_in_gate' => ['suspend_local_user'],
         'reactivation_required' => ['reactivate_local_user', 'skip'],
+        'local_manual' => ['manual_review'], 'missing_student_in_gate' => ['manual_review'],
         'local_only' => ['manual_review'], 'conflict' => ['manual_review'],
     ];
 
@@ -21,6 +22,9 @@ class GateUserReconciliationService
         $locals = ($localUsers ?? User::query()->get())->values();
         $byUuid = $locals->filter(fn ($u) => $u->gate_user_uuid)->groupBy(fn ($u) => strtolower($u->gate_user_uuid));
         $byEmail = $locals->filter(fn ($u) => $u->email)->groupBy(fn ($u) => $this->key($u->email));
+        $byNis = $locals->filter(fn ($u) => filled($u->santri?->nis))->groupBy(fn ($u) => $this->key($u->santri->nis));
+        $gateNisCounts = collect($gateUsers)->map(fn ($raw) => $this->normalizeGate($raw))->filter(fn ($u) => filled($u['nis']))->countBy(fn ($u) => $this->key($u['nis']));
+        $gateEmailCounts = collect($gateUsers)->map(fn ($raw) => $this->normalizeGate($raw))->filter(fn ($u) => filled($u['email']))->countBy(fn ($u) => $this->key($u['email']));
         $seenLocal = [];
         $seenGate = [];
         $items = [];
@@ -48,9 +52,40 @@ class GateUserReconciliationService
             }
             $local = $uuidCandidates->first();
             if ($local) {
+                if (($local->santri && $gate['type'] !== 'student') || ($local->santri && filled($gate['nis']) && $this->key($local->santri->nis) !== $this->key($gate['nis']))) {
+                    $items[] = $this->item($gate, $local, 'conflict', 'manual_review', [], 'linked_student_integrity_conflict');
+                    $seenLocal[$local->id] = true;
+
+                    continue;
+                }
+                $nisCandidate = filled($gate['nis']) ? $byNis->get($this->key($gate['nis']), collect()) : collect();
+                $emailCandidate = filled($gate['email']) ? $byEmail->get($this->key($gate['email']), collect()) : collect();
+                if (($nisCandidate->isNotEmpty() && ! $nisCandidate->contains(fn ($candidate) => $candidate->is($local))) || ($emailCandidate->isNotEmpty() && ! $emailCandidate->contains(fn ($candidate) => $candidate->is($local)))) {
+                    $items[] = $this->item($gate, $local, 'conflict', 'manual_review', [], 'uuid_integrity_conflict');
+                    $seenLocal[$local->id] = true;
+
+                    continue;
+                }
                 $seenLocal[$local->id] = true;
                 $category = $this->linkedCategory($gate, $local);
                 $items[] = $this->item($gate, $local, $category, self::ACTIONS[$category][0], $this->differences($gate, $local));
+
+                continue;
+            }
+            $nisCandidates = filled($gate['nis']) ? $byNis->get($this->key($gate['nis']), collect()) : collect();
+            if (filled($gate['nis']) && (($gateNisCounts[$this->key($gate['nis'])] ?? 0) > 1 || $nisCandidates->count() > 1)) {
+                $items[] = $this->item($gate, null, 'conflict', 'manual_review', [], 'duplicate_nis');
+
+                continue;
+            }
+            if ($nisCandidates->count() === 1) {
+                $candidate = $nisCandidates->first();
+                $seenLocal[$candidate->id] = true;
+                $emailCandidate = filled($gate['email']) ? $byEmail->get($this->key($gate['email']), collect()) : collect();
+                $error = $gate['type'] !== 'student' || ! $candidate->santri
+                    ? 'student_type_mismatch'
+                    : ($emailCandidate->isNotEmpty() && ! $emailCandidate->contains(fn ($user) => $user->is($candidate)) ? 'nis_email_conflict' : 'bridge_required_by_nis');
+                $items[] = $this->item($gate, $candidate, 'conflict', 'manual_review', [], $error);
 
                 continue;
             }
@@ -59,7 +94,9 @@ class GateUserReconciliationService
                 foreach ($emailCandidates as $candidate) {
                     $seenLocal[$candidate->id] = true;
                 }
-                $code = $emailCandidates->count() > 1 ? 'multiple_local_candidates' : ($emailCandidates->first()->gate_user_uuid ? 'uuid_mismatch' : 'unlinked_matching_email');
+                $code = $emailCandidates->count() > 1 || ($gateEmailCounts[$this->key($gate['email'])] ?? 0) > 1
+                    ? 'multiple_local_candidates'
+                    : ($emailCandidates->first()->gate_user_uuid ? 'uuid_mismatch' : ($gate['email_verified'] ? 'bridge_required_by_verified_email' : 'review_email_unverified'));
                 $items[] = $this->item($gate, $emailCandidates->count() === 1 ? $emailCandidates->first() : null, 'conflict', 'manual_review', [], $code);
             } else {
                 $items[] = $this->item($gate, null, 'missing_in_application', 'create_local_user');
@@ -67,7 +104,8 @@ class GateUserReconciliationService
         }
         foreach ($locals as $local) {
             if (! isset($seenLocal[$local->id])) {
-                $items[] = $this->item([], $local, 'local_only', 'manual_review');
+                $category = $local->identityOwnership() === 'local_manual' ? 'local_manual' : ($local->santri ? 'missing_student_in_gate' : 'local_only');
+                $items[] = $this->item([], $local, $category, 'manual_review');
             }
         }
 
@@ -76,16 +114,19 @@ class GateUserReconciliationService
 
     public function normalizeGate(array $raw): array
     {
-        $access = data_get($raw, 'application_access.smart', data_get($raw, 'applications.smart', data_get($raw, 'access_active', data_get($raw, 'application_access', true))));
+        $access = data_get($raw, 'application_access.status', data_get($raw, 'application_access.smart', data_get($raw, 'applications.smart', data_get($raw, 'access_active', data_get($raw, 'application_access', true)))));
 
         return [
             'gate_user_uuid' => data_get($raw, 'gate_user_uuid', data_get($raw, 'uuid')),
             'name' => trim((string) data_get($raw, 'name', '')),
             'email' => strtolower(trim((string) data_get($raw, 'email', ''))),
             'username' => strtolower(trim((string) data_get($raw, 'username', ''))),
-            'role' => strtolower((string) data_get($raw, 'application_role', data_get($raw, 'role', data_get($raw, 'type', '')))),
+            'type' => strtolower(trim((string) data_get($raw, 'type', ''))),
+            'email_verified' => filter_var(data_get($raw, 'email_verified', filled(data_get($raw, 'email_verified_at'))), FILTER_VALIDATE_BOOL),
+            'legacy_sso_sub' => trim((string) data_get($raw, 'legacy_sso_sub', '')),
+            'role' => strtolower((string) data_get($raw, 'application_access.role', data_get($raw, 'application_role', data_get($raw, 'role', data_get($raw, 'type', ''))))),
             'identity_active' => in_array(strtolower((string) data_get($raw, 'status', data_get($raw, 'identity_status', 'active'))), ['active', 'enabled', '1'], true),
-            'access_active' => filter_var($access, FILTER_VALIDATE_BOOL),
+            'access_active' => is_string($access) ? in_array(strtolower($access), ['active', 'enabled', '1', 'true'], true) : filter_var($access, FILTER_VALIDATE_BOOL),
             'photo' => data_get($raw, 'photo'), 'qr_code' => data_get($raw, 'qr_code'),
             'nis' => data_get($raw, 'nis'), 'nip' => data_get($raw, 'nip'),
         ];

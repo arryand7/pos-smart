@@ -1,75 +1,86 @@
 # Gate Provisioning Production Runbook
 
-This runbook is for a controlled database rehearsal and production release. Gate assignments are managed by a Gate administrator; SMART never creates or changes them. Do not run synchronization from deployment hooks, migrations, schedulers, or application boot.
+Gate is the identity source of truth for Gate-managed users. SMART never creates Gate users or assignments and never synchronizes from deployment hooks, migrations, schedulers, or application boot.
 
-## 1. Client configuration
+## Configuration
 
-Create a dedicated Gate provisioning client authorized to read users assigned to the SMART application and report sync results. Configure values through the deployment secret store, never Git:
+Store credentials outside Git:
 
 ```dotenv
 GATE_URL=https://gate.example.com
 GATE_PROVISIONING_CLIENT_ID=
 GATE_PROVISIONING_CLIENT_SECRET=
+GATE_IDENTITY_BRIDGE_ENABLED=false
 GATE_SYNC_ENABLED=false
 GATE_SYNC_DRY_RUN=true
 GATE_SYNC_PHOTO=false
 ```
 
-Keep the remaining timeout, batch-size, photo-size, redirect, and threshold defaults from `.env.example` unless rehearsal evidence supports a reviewed change.
+Gate-managed identity fields are UUID, username when published, email, name, NIS/NIP, active status, type, and approved application role mappings. SMART-owned wallet, transaction, payment, journal, inventory, limits, preferences, operational profiles, and business relations are outside sync authority.
 
-## 2. SMART application assignment
+## Migration and ownership rehearsal
 
-The provisioning API returns only users with an active SMART application assignment. A Gate administrator must create and maintain that assignment in Gate. SMART does not infer, auto-merge, or create Gate assignments. HTTP 401/403 means the client is missing or lacks access; HTTP success with zero users may mean the SMART assignment is absent or empty and is treated as a blocker while SMART has active users.
-
-## 3. Migration preflight and preview
-
-Before the schema migration, run the read-only duplicate check against the rehearsal database:
+Run the read-only preflight before migration:
 
 ```bash
 php artisan gate:migration-preflight
 ```
 
-After migration and local readiness checks, create a preview as a known local superadmin:
+The ownership migration adds nullable `identity_source`; it does not classify existing users by role. A UUID-linked user is always Gate-managed. Explicitly classify a proven local account with:
+
+```bash
+php artisan gate:set-user-ownership <USER_ID> local_manual
+```
+
+Local wali and other approved local accounts remain active when absent from Gate. Unclassified missing santri are reported for investigation.
+
+## Identity bridge preview and apply
+
+SMART `santri` officially maps to Gate `student`. Matching priority is UUID, unique NIS, unique verified email, reviewed unverified email, then an official legacy subject if Gate publishes one. Names never match.
+
+```bash
+php artisan gate:bridge-identities --preview
+```
+
+Review all counts and conflicts. The current Gate provisioning payload does not contain email-verification evidence or legacy numeric subject, so Smart will not automatically use those paths until the API contract supplies them.
+
+The provisioning endpoint currently returns only actively assigned SMART users. With zero assignments, bridge preview intentionally hard-stops. To satisfy the required ordering, Gate operations must first provide an authorized non-mutating population preview/export or extend the provisioning contract; SMART must not create assignments to bypass this dependency.
+
+After a reviewed non-empty population and ownership decision, a Gate administrator previews and creates assignments only for Gate users entitled to SMART—not all 450 SMART rows. Re-run bridge preview. For a controlled bridge window, enable `GATE_IDENTITY_BRIDGE_ENABLED=true` and run:
+
+```bash
+php artisan gate:bridge-identities --apply
+```
+
+Apply fills only null UUIDs, changes no other identity or business field, retains tokens, verifies affected rows, and is idempotent.
+
+## Reconciliation
+
+After linkage:
 
 ```bash
 php artisan smart:gate-sync-preflight
 php artisan gate:sync-users --preview --actor=<SUPERADMIN_ID>
 ```
 
-Preview persists only an expiring audit batch. It does not mutate users, roles, passwords, tokens, photos, wallet balances, transactions, limits, inventory, or accounting data. Review counts for received, matched, create, update, role-change, suspend, reactivate, unmatched, duplicate, and errors.
+UUID is primary; NIS and email are integrity checks. Unknown role mappings, duplicate identifiers, type mismatch, and conflicting candidates require review. Empty payload is a blocker. Absence never suspends a user. Suspension requires a linked Gate-managed UUID and an explicit inactive/revoked Gate record.
 
-## 4. Apply
-
-Apply is disabled by default. After reviewing the exact preview batch, deliberately set `GATE_SYNC_ENABLED=true` and `GATE_SYNC_DRY_RUN=false` for the controlled operation, then run:
+Only after separate approval, enable `GATE_SYNC_ENABLED=true`, set `GATE_SYNC_DRY_RUN=false`, and apply the exact reviewed batch:
 
 ```bash
 php artisan gate:sync-users --apply --batch=<PREVIEW_UUID> --actor=<SUPERADMIN_ID>
 ```
 
-Apply is locked and once-only. It creates or updates identity fields, suspends or reactivates according to a reviewed Gate record, and records every item. It never deletes a SMART user or changes password hashes. Suspension revokes that user's API tokens but preserves all business history. Unknown role mappings fail the item without replacing the existing role. Duplicate identity conflicts block apply. A failed Gate result report remains retryable without repeating local mutations.
+Threshold guards for create, role changes, and suspension remain mandatory. Photo synchronization stays disabled until separately rehearsed.
 
-## 5. Photo synchronization
+## Conflict handling and rollback
 
-Keep `GATE_SYNC_PHOTO=false` until a separate rehearsal validates storage permissions and the Gate photo endpoint. When enabled, only HTTPS URLs on the exact `GATE_URL` hostname are accepted. Private/reserved addresses, URL credentials, unsafe redirects, oversized responses, and content whose MIME does not match a supported image signature are rejected. Preview never downloads photos.
+- Duplicate UUID/NIS/email or disagreeing UUID/NIS/email: resolve through reviewed source-data correction; do not auto-merge.
+- `REVIEW-EMAIL-UNVERIFIED`: obtain Gate verification evidence or use a separately audited manual decision; default apply skips it.
+- `MISSING-STUDENT-IN-GATE`: investigate Gate population and assignment; do not silently mark local.
+- HTTP 401/403: verify client scope without printing secrets.
+- Empty success response: verify assignment and application selection; no local mutation occurred.
 
-## 6. Threshold guards
+Before any migration or apply, verify a database backup. For an incorrect link, stop further applies, preserve evidence, and use an approved identity-only correction. Do not delete users or restore wallet, transaction, payment, journal, inventory, or limit data unless an independent investigation proves those domains changed.
 
-The following percentage limits stop apply and require review:
-
-- `GATE_SYNC_MAX_SUSPEND_PERCENT`
-- `GATE_SYNC_MAX_ROLE_CHANGE_PERCENT`
-- `GATE_SYNC_MAX_CREATE_PERCENT`
-
-Percentages are calculated against current local/active user counts. Do not raise a limit merely to bypass a surprising preview; reconcile assignments and identity conflicts first. There is intentionally no deployment-time override for an empty Gate response.
-
-## 7. Troubleshooting an empty or invalid response
-
-- `GATE_EMPTY_ASSIGNMENT_RESPONSE`: verify active SMART assignments in Gate and the selected application/client. No local suspension occurred.
-- `GATE_AUTHENTICATION_FAILED` or HTTP 401/403: verify the client ID, secret injection, and provisioning scope without printing the secret.
-- `GATE_INVALID_RESPONSE`: compare the Gate response schema with the provisioning contract; do not apply.
-- Duplicate identity errors: resolve UUID/email/SSO duplicates through a separately reviewed data correction. SMART does not auto-link by email, name, username, NIS, NIP, photo, or QR.
-- Threshold errors: inspect the preview and Gate assignment state before changing configuration.
-
-## 8. Operational rollback
-
-Before migration or apply, take and verify a database backup through the normal operations process. For an incorrect identity update, stop further applies, preserve the batch/item and activity audit records, restore identity/status from the reviewed backup or an approved corrective batch, and reissue tokens only through the normal authentication process. Do not delete users or restore wallet, transaction, inventory, limit, or accounting tables unless an independent incident investigation proves they changed. Do not roll back the schema after sync usage without first exporting audit records and reviewing foreign-key impact.
+Controlled order: migration rehearsal; bridge preview; ownership decisions; Gate-side assignment preview; Gate administrator creates approved assignments; provisioning preview; bridge apply; reconciliation preview; separately approved reconciliation apply.

@@ -32,10 +32,23 @@ class User extends Authenticatable
         'sso_sub',
         'sso_synced_at',
         'gate_user_uuid',
+        'identity_source',
         'status',
         'last_gate_synced_at',
         'gate_photo_checksum',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (User $user) {
+            $user->identity_source ??= $user->gate_user_uuid ? 'gate_managed' : 'local_manual';
+        });
+    }
+
+    public function identityOwnership(): ?string
+    {
+        return $this->gate_user_uuid ? 'gate_managed' : $this->identity_source;
+    }
 
     /**
      * The attributes that should be hidden for serialization.

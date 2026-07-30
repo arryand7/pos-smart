@@ -116,7 +116,7 @@ class GateUserSyncService
 
                 return;
             }
-            $user = User::create(['name' => $gate['name'], 'email' => $gate['email'], 'role' => $role, 'roles' => [$role], 'gate_user_uuid' => $item->gate_user_uuid, 'status' => 'active', 'last_gate_synced_at' => now(), 'password' => Hash::make(Str::random(64))]);
+            $user = User::create(['name' => $gate['name'], 'email' => $gate['email'], 'role' => $role, 'roles' => [$role], 'gate_user_uuid' => $item->gate_user_uuid, 'identity_source' => 'gate_managed', 'status' => 'active', 'last_gate_synced_at' => now(), 'password' => Hash::make(Str::random(64))]);
             if ($role === 'santri') {
                 Santri::create(['user_id' => $user->id, 'nis' => $gate['nis'], 'name' => $gate['name'], 'qr_code' => config('services.gate.sync_qr') ? ($gate['qr_code'] ?? null) : null, 'wallet_balance' => 0, 'daily_limit' => 0, 'monthly_limit' => 0]);
             }
@@ -136,6 +136,11 @@ class GateUserSyncService
             $result = 'updated';
             $event = 'GATE_USER_UPDATED';
         } elseif ($action === 'suspend_local_user' && $user) {
+            if ($user->identityOwnership() !== 'gate_managed' || $user->gate_user_uuid !== $item->gate_user_uuid) {
+                $this->fail($item, 'SYNC_SUSPEND_REQUIRES_GATE_MANAGED_LINK');
+
+                return;
+            }
             $user->update(['status' => 'suspended', 'last_gate_synced_at' => now()]);
             $user->tokens()->delete();
             $result = 'suspended';
