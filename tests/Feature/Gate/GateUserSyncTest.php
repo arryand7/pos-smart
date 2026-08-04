@@ -173,9 +173,9 @@ class GateUserSyncTest extends TestCase
         $batch = GateSyncBatch::latest()->firstOrFail();
         $this->post(route('admin.gate-sync.apply', $batch))->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('users', ['email' => 'valid@gate.test', 'role' => 'admin']);
+        $this->assertDatabaseHas('users', ['email' => 'valid@gate.test', 'role' => 'member']);
         $this->assertDatabaseMissing('users', ['email' => 'unknown@gate.test']);
-        $this->assertDatabaseHas('gate_sync_items', ['batch_id' => $batch->id, 'result_status' => 'failed', 'error_code' => 'SYNC_ROLE_MAPPING_FAILED']);
+        $this->assertDatabaseHas('gate_sync_items', ['batch_id' => $batch->id, 'result_status' => 'conflict', 'error_code' => 'unsupported_user_type']);
         $this->assertSame('completed', $batch->fresh()->status);
     }
 }

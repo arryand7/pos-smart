@@ -89,6 +89,11 @@ class User extends Authenticatable
         return $this->hasOne(Wali::class);
     }
 
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(UserWallet::class);
+    }
+
     public function cashierTransactions(): HasMany
     {
         return $this->hasMany(Transaction::class, 'kasir_id');

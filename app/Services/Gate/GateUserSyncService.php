@@ -7,6 +7,7 @@ use App\Models\GateSyncBatch;
 use App\Models\GateSyncItem;
 use App\Models\Santri;
 use App\Models\User;
+use App\Models\UserWallet;
 use App\Models\Wali;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -100,7 +101,7 @@ class GateUserSyncService
         $result = 'skipped';
         $event = null;
         if ($action === 'create_local_user') {
-            $role = $this->mappedRole($gate['role'] ?? '');
+            $role = $this->reconciler->resolvedRole($gate);
             if (! $role) {
                 $this->fail($item, 'SYNC_ROLE_MAPPING_FAILED');
 
@@ -117,6 +118,7 @@ class GateUserSyncService
                 return;
             }
             $user = User::create(['name' => $gate['name'], 'email' => $gate['email'], 'role' => $role, 'roles' => [$role], 'gate_user_uuid' => $item->gate_user_uuid, 'identity_source' => 'gate_managed', 'status' => 'active', 'last_gate_synced_at' => now(), 'password' => Hash::make(Str::random(64))]);
+            $this->ensureWallet($user);
             if ($role === 'santri') {
                 Santri::create(['user_id' => $user->id, 'nis' => $gate['nis'], 'name' => $gate['name'], 'qr_code' => config('services.gate.sync_qr') ? ($gate['qr_code'] ?? null) : null, 'wallet_balance' => 0, 'daily_limit' => 0, 'monthly_limit' => 0]);
             }
@@ -126,13 +128,15 @@ class GateUserSyncService
             $result = 'created';
             $event = 'GATE_USER_CREATED';
         } elseif ($action === 'update_identity' && $user) {
-            $role = $this->mappedRole($gate['role'] ?? '');
+            $role = $this->reconciler->resolvedRole($gate, $user);
             if (! $role) {
                 $this->fail($item, 'SYNC_ROLE_MAPPING_FAILED');
 
                 return;
             }
-            $user->update(['name' => $gate['name'], 'email' => $gate['email'], 'role' => $role, 'roles' => [$role], 'last_gate_synced_at' => now()]);
+            $roles = collect($user->roles ?? [])->push($role)->filter()->unique()->values()->all();
+            $user->update(['name' => $gate['name'], 'email' => $gate['email'], 'role' => $role, 'roles' => $roles, 'last_gate_synced_at' => now()]);
+            $this->ensureWallet($user);
             $result = 'updated';
             $event = 'GATE_USER_UPDATED';
         } elseif ($action === 'suspend_local_user' && $user) {
@@ -147,11 +151,15 @@ class GateUserSyncService
             $event = 'GATE_USER_SUSPENDED';
         } elseif ($action === 'reactivate_local_user' && $user) {
             $user->update(['status' => 'active', 'last_gate_synced_at' => now()]);
+            $this->ensureWallet($user);
             $result = 'reactivated';
             $event = 'GATE_USER_REACTIVATED';
         } elseif ($action === 'no_change') {
             if ($user) {
-                $user->forceFill(['last_gate_synced_at' => now()])->save();
+                if (! $user->hasRole('super_admin')) {
+                    $user->forceFill(['last_gate_synced_at' => now()])->save();
+                }
+                $this->ensureWallet($user);
             }
             $result = 'matched';
         } elseif ($action === 'manual_review') {
@@ -188,9 +196,11 @@ class GateUserSyncService
         return $batch->fresh('items');
     }
 
-    private function mappedRole(string $role): ?string
+    private function ensureWallet(User $user): void
     {
-        return config('services.gate.role_mapping')[$role] ?? null;
+        if (! $user->hasRole('super_admin')) {
+            UserWallet::firstOrCreate(['user_id' => $user->id]);
+        }
     }
 
     private function fail(GateSyncItem $item, string $code): void

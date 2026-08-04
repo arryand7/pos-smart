@@ -8,6 +8,7 @@ enum UserRole: string
     case ADMIN = 'admin';
     case BENDAHARA = 'bendahara';
     case KASIR = 'kasir';
+    case MEMBER = 'member';
     case SANTRI = 'santri';
     case WALI = 'wali';
 
@@ -18,6 +19,7 @@ enum UserRole: string
             self::ADMIN->value => 'Administrator',
             self::BENDAHARA->value => 'Bendahara',
             self::KASIR->value => 'Kasir',
+            self::MEMBER->value => 'Member Pembeli',
             self::SANTRI->value => 'Santri',
             self::WALI->value => 'Wali Santri',
         ];

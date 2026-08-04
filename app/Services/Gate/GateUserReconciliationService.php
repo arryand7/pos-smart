@@ -2,6 +2,7 @@
 
 namespace App\Services\Gate;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -44,6 +45,12 @@ class GateUserReconciliationService
                 continue;
             }
             $seenGate[$uuidKey] = true;
+            if (! in_array($gate['type'], ['student', 'teacher', 'staff', 'admin', 'parent'], true)) {
+                $error = $gate['type'] === '' ? 'missing_user_type' : 'unsupported_user_type';
+                $items[] = $this->item($gate, null, 'conflict', 'manual_review', [], $error);
+
+                continue;
+            }
             $uuidCandidates = $byUuid->get($uuidKey, collect());
             if ($uuidCandidates->count() > 1) {
                 $items[] = $this->item($gate, null, 'conflict', 'manual_review', [], 'multiple_local_candidates');
@@ -121,7 +128,7 @@ class GateUserReconciliationService
             'name' => trim((string) data_get($raw, 'name', '')),
             'email' => strtolower(trim((string) data_get($raw, 'email', ''))),
             'username' => strtolower(trim((string) data_get($raw, 'username', ''))),
-            'type' => strtolower(trim((string) data_get($raw, 'type', ''))),
+            'type' => $this->normalizedType($raw),
             'email_verified' => filter_var(data_get($raw, 'email_verified', filled(data_get($raw, 'email_verified_at'))), FILTER_VALIDATE_BOOL),
             'legacy_sso_sub' => trim((string) data_get($raw, 'legacy_sso_sub', '')),
             'role' => strtolower((string) data_get($raw, 'application_access.role', data_get($raw, 'application_role', data_get($raw, 'role', data_get($raw, 'type', ''))))),
@@ -134,6 +141,10 @@ class GateUserReconciliationService
 
     private function linkedCategory(array $gate, User $local): string
     {
+        if ($local->hasRole(UserRole::SUPER_ADMIN)) {
+            return 'matched';
+        }
+
         if (! $gate['identity_active']) {
             return 'inactive_in_gate';
         }
@@ -149,15 +160,47 @@ class GateUserReconciliationService
 
     private function differences(array $gate, User $local): array
     {
+        if ($local->hasRole(UserRole::SUPER_ADMIN)) {
+            return [];
+        }
+
         $diff = [];
-        foreach (['name', 'email', 'role'] as $field) {
-            $lv = $field === 'role' ? ($local->role?->value ?? $local->role) : $local->{$field};
-            if ($this->key((string) $lv) !== $this->key((string) $gate[$field])) {
-                $diff[$field] = ['local' => $lv, 'gate' => $gate[$field]];
+        foreach (['name', 'email'] as $field) {
+            if ($this->key((string) $local->{$field}) !== $this->key((string) $gate[$field])) {
+                $diff[$field] = ['local' => $local->{$field}, 'gate' => $gate[$field]];
             }
         }
 
+        $localRole = $local->role?->value ?? $local->role;
+        $resolvedRole = $this->resolvedRole($gate, $local);
+        if ($resolvedRole !== null && $this->key((string) $localRole) !== $this->key($resolvedRole)) {
+            $diff['role'] = ['local' => $localRole, 'gate' => $resolvedRole];
+        }
+
         return $diff;
+    }
+
+    public function resolvedRole(array $gate, ?User $local = null): ?string
+    {
+        $localRole = $local?->role?->value ?? $local?->role;
+
+        if ($localRole === UserRole::SUPER_ADMIN->value) {
+            return UserRole::SUPER_ADMIN->value;
+        }
+
+        if (($gate['type'] ?? '') === 'student') {
+            return UserRole::SANTRI->value;
+        }
+
+        if (in_array($localRole, [UserRole::ADMIN->value, UserRole::BENDAHARA->value, UserRole::KASIR->value], true)) {
+            return $localRole;
+        }
+
+        if (! in_array(($gate['type'] ?? ''), ['teacher', 'staff', 'admin', 'parent'], true)) {
+            return null;
+        }
+
+        return UserRole::MEMBER->value;
     }
 
     private function item(array $gate, ?User $local, string $category, string $action, array $differences = [], ?string $error = null): array
@@ -168,5 +211,23 @@ class GateUserReconciliationService
     private function key(string $value): string
     {
         return mb_strtolower(trim($value));
+    }
+
+    private function normalizedType(array $raw): string
+    {
+        $type = strtolower(trim((string) data_get($raw, 'type', '')));
+        if ($type !== '') {
+            return $type;
+        }
+
+        $legacyRole = strtolower(trim((string) data_get($raw, 'role', '')));
+
+        return match ($legacyRole) {
+            UserRole::SANTRI->value => 'student',
+            UserRole::WALI->value => 'parent',
+            UserRole::KASIR->value, UserRole::BENDAHARA->value => 'staff',
+            UserRole::SUPER_ADMIN->value => 'admin',
+            default => $legacyRole,
+        };
     }
 }

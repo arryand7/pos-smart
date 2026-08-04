@@ -81,6 +81,7 @@ class EnsureSessionRole
             UserRole::SUPER_ADMIN->value, UserRole::ADMIN->value => route('admin.dashboard'),
             'bendahara' => route('dashboard.finance'),
             'kasir' => route('pos'),
+            'member' => route('catalog.index'),
             'wali' => route('portal.wali'),
             'santri' => route('portal.santri'),
             default => null,

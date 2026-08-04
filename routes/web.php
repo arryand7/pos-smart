@@ -81,7 +81,7 @@ Route::middleware('session.role:admin,bendahara,super_admin')
     ->get('/analytics/revenue-series', [AnalyticsController::class, 'revenueSeries'])
     ->name('analytics.revenue-series');
 
-Route::middleware('session.role:admin,bendahara,kasir,wali,santri,super_admin')->group(function () {
+Route::middleware('session.role:admin,bendahara,kasir,member,wali,santri,super_admin')->group(function () {
     Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [\App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
 });
