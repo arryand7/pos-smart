@@ -277,6 +277,10 @@
         @apply bg-rose-50 border-rose-100 text-rose-700;
     }
 
+    .alert-error {
+        @apply bg-rose-50 border-rose-100 text-rose-700;
+    }
+
     .alert-warning {
         @apply bg-amber-50 border-amber-100 text-amber-700;
     }

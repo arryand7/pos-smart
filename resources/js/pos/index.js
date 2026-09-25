@@ -228,15 +228,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        elements.statusMessage.className = `alert alert-${type}`;
+        elements.statusMessage.classList.remove('alert-success', 'alert-danger', 'alert-warning', 'alert-info', 'alert-error');
+        elements.statusMessage.classList.add(`alert-${type}`);
         elements.statusMessage.textContent = text;
         elements.statusMessage.hidden = false;
 
-        window.setTimeout(() => {
+        const hideAfter = type === 'error' ? 20000 : 5000;
+
+        window.clearTimeout(elements.statusMessage._hideTimer);
+        elements.statusMessage._hideTimer = window.setTimeout(() => {
             if (elements.statusMessage.textContent === text) {
                 elements.statusMessage.hidden = true;
             }
-        }, 5000);
+        }, hideAfter);
     }
 
     function cartSubtotal() {
@@ -1259,10 +1263,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (! error.response) {
                 setStatus('warning', 'Koneksi bermasalah. Pembayaran tidak diproses; keranjang tetap tersimpan.');
             } else {
-                const code = error.response?.data?.code;
+                const data = error.response.data;
+                const payload = (data && typeof data === 'object') ? data : {};
+
+                const code = payload.code || null;
                 const messages = {
                     ACCOUNTING_CONFIGURATION_MISSING: 'Transaksi belum dapat diproses karena konfigurasi akun keuangan belum lengkap. Hubungi administrator.',
-                    CATEGORY_NOT_ALLOWED: error.response?.data?.message,
+                    CATEGORY_NOT_ALLOWED: payload.message,
                     INSUFFICIENT_WALLET_BALANCE: 'Saldo santri tidak mencukupi.',
                     DAILY_LIMIT_EXCEEDED: 'Limit harian santri telah terlampaui.',
                     WEEKLY_LIMIT_EXCEEDED: 'Limit mingguan santri telah terlampaui.',
@@ -1270,7 +1277,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     INSUFFICIENT_CASH: 'Jumlah tunai yang diterima kurang dari total transaksi.',
                     PAYMENT_GATEWAY_UNAVAILABLE: 'Payment gateway belum tersedia atau belum dikonfigurasi. Hubungi administrator.',
                 };
-                setStatus('error', messages[code] || error.response?.data?.message || 'Transaksi gagal diproses.');
+
+                const baseMessage = messages[code]
+                    || payload.message
+                    || (typeof data === 'string' ? 'Kesalahan tidak terduga dari server.' : null)
+                    || 'Transaksi gagal diproses.';
+
+                let extra = '';
+                if (code === 'PRODUCT_OUT_OF_STOCK' && payload.errors?.available_stock != null) {
+                    extra = ` Stok tersedia: ${payload.errors.available_stock}.`;
+                }
+
+                setStatus('error', baseMessage + extra);
             }
         } finally {
             state.isSubmitting = false;

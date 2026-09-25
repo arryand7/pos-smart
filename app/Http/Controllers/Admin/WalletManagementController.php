@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\Santri;
 use App\Services\Accounting\AccountingService;
 use App\Services\Wallet\WalletService;
+use App\Services\Wallet\WalletException;
 use App\Support\Rupiah;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -107,18 +108,24 @@ class WalletManagementController extends Controller
         ]);
         $validated['amount'] = Rupiah::from($validated['amount'], 'adjustment_amount');
 
-        if ($validated['type'] === 'credit') {
-            $this->walletService->credit($santri, $validated['amount'], [
-                'performed_by' => auth()->id(),
-                'channel' => 'adjustment',
-                'description' => 'Koreksi tambah: '.$validated['reason'],
-            ]);
-        } else {
-            $this->walletService->debit($santri, $validated['amount'], [
-                'performed_by' => auth()->id(),
-                'channel' => 'adjustment',
-                'description' => 'Koreksi kurang: '.$validated['reason'],
-            ]);
+        try {
+            if ($validated['type'] === 'credit') {
+                $this->walletService->credit($santri, $validated['amount'], [
+                    'performed_by' => auth()->id(),
+                    'channel' => 'adjustment',
+                    'description' => 'Koreksi tambah: '.$validated['reason'],
+                ]);
+            } else {
+                $this->walletService->debit($santri, $validated['amount'], [
+                    'performed_by' => auth()->id(),
+                    'channel' => 'adjustment',
+                    'description' => 'Koreksi kurang: '.$validated['reason'],
+                ]);
+            }
+        } catch (WalletException $exception) {
+            return back()
+                ->with('error', $exception->getMessage())
+                ->withInput();
         }
 
         ActivityLog::log('adjustment', 'Koreksi saldo ('.$validated['type'].') Rp'.number_format($validated['amount'], 0, ',', '.').' untuk '.$santri->name.': '.$validated['reason'], $santri, [

@@ -40,7 +40,11 @@ class WalletService
             $santri = Santri::lockForUpdate()->findOrFail($santri->id);
 
             $this->assertSufficientBalance($santri, $amount);
-            $this->assertWithinLimit($santri, $amount);
+            $this->assertWalletNotLocked($santri);
+
+            if (($context['channel'] ?? null) !== 'adjustment') {
+                $this->assertWithinLimit($santri, $amount);
+            }
 
             $before = $this->money($santri->wallet_balance, "santris.{$santri->id}.wallet_balance");
             $after = $before - $amount;
@@ -104,12 +108,15 @@ class WalletService
         }
     }
 
-    protected function assertWithinLimit(Santri $santri, int $amount): void
+    protected function assertWalletNotLocked(Santri $santri): void
     {
         if ($santri->is_wallet_locked) {
             throw new WalletException('WALLET_INACTIVE', 'Dompet santri sedang diblokir oleh wali.');
         }
+    }
 
+    protected function assertWithinLimit(Santri $santri, int $amount): void
+    {
         $dailyLimit = $this->limit($santri->daily_limit, config('smart.wallet.default_daily_limit', 0), 'daily_limit');
         $weeklyLimit = $this->limit($santri->weekly_limit, config('smart.wallet.default_weekly_limit', 200000), 'weekly_limit');
         $monthlyLimit = $this->limit($santri->monthly_limit, config('smart.wallet.default_monthly_limit', 0), 'monthly_limit');
